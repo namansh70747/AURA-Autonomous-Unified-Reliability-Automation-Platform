@@ -1,0 +1,93 @@
+---
+# Service Account for AURA
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: aura-watcher
+  namespace: default
+
+---
+# ClusterRole for reading pods, events, and metrics
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: aura-watcher-role
+rules:
+  # Pods - read and watch
+  - apiGroups: [""]
+    resources: ["pods", "pods/status", "pods/log"]
+    verbs: ["get", "list", "watch"]
+
+  # Events - read
+  - apiGroups: [""]
+    resources: ["events"]
+    verbs: ["get", "list", "watch"]
+
+  # Nodes - read for metrics
+  - apiGroups: [""]
+    resources: ["nodes", "nodes/stats"]
+    verbs: ["get", "list"]
+
+  # Services - read
+  - apiGroups: [""]
+    resources: ["services", "endpoints"]
+    verbs: ["get", "list", "watch"]
+
+  # Deployments - read for autoscaling
+  - apiGroups: ["apps"]
+    resources: ["deployments", "replicasets", "statefulsets"]
+    verbs: ["get", "list", "watch"]
+
+  # Metrics - if using metrics-server
+  - apiGroups: ["metrics.k8s.io"]
+    resources: ["pods", "nodes"]
+    verbs: ["get", "list"]
+
+---
+# ClusterRoleBinding for AURA
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: aura-watcher-binding
+subjects:
+  - kind: ServiceAccount
+    name: aura-watcher
+    namespace: default
+roleRef:
+  kind: ClusterRole
+  name: aura-watcher-role
+  apiGroup: rbac.authorization.k8s.io
+
+---
+# Role for actions in default namespace (scaling, etc.)
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: aura-actuator-role
+  namespace: default
+rules:
+  # Allow scaling deployments
+  - apiGroups: ["apps"]
+    resources: ["deployments", "deployments/scale"]
+    verbs: ["get", "list", "patch", "update"]
+
+  # Allow creating/deleting pods (for testing)
+  - apiGroups: [""]
+    resources: ["pods"]
+    verbs: ["create", "delete", "patch"]
+
+---
+# RoleBinding for actions
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: aura-actuator-binding
+  namespace: default
+subjects:
+  - kind: ServiceAccount
+    name: aura-watcher
+    namespace: default
+roleRef:
+  kind: Role
+  name: aura-actuator-role
+  apiGroup: rbac.authorization.k8s.io

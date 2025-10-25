@@ -1,0 +1,44 @@
+# AURA Main Configuration
+
+# Application settings
+app:
+  name: "AURA"
+  version: "0.1.0"
+  log_level: "info"
+
+# PostgreSQL connection
+database:
+  host: "postgres" # Docker service name (use 'localhost' for local dev)
+  port: 5432
+  user: "aura"
+  password: "aura123"
+  dbname: "aura_db"
+  max_connections: 10
+
+# Prometheus connection
+prometheus:
+  url: "http://prometheus:9090" # Docker service name (use 'http://localhost:9090' for local dev)
+  scrape_interval: "10s"
+
+# Kubernetes watcher settings
+kubernetes:
+  enabled: true
+  namespace: "default" # Watch pods in this namespace
+  metrics_interval: "30s"
+
+# Observer settings
+observer:
+  metrics_interval: "10s"
+  retention_period: "24h"
+
+# Analyzer thresholds
+analyzer:
+  cpu_threshold: 85.0
+  memory_threshold: 90.0
+  error_rate_threshold: 15.0
+  latency_threshold: 2000.0
+
+# Decision engine
+decision:
+  confidence_threshold: 80.0
+  dry_run: true # Set to false to execute actions

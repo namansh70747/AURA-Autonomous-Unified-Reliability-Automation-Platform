@@ -1,0 +1,162 @@
+# AURA Decision Policies
+# Defines automated remediation policies and thresholds
+
+policies:
+  # CPU-based scaling policies
+  cpu_scaling:
+    - name: "High CPU Usage"
+      condition:
+        metric: "cpu_usage"
+        operator: ">"
+        threshold: 85.0
+        duration: "5m"
+      action: "scale_up"
+      parameters:
+        replicas_increase: 1
+        max_replicas: 10
+      confidence_threshold: 80.0
+
+    - name: "Low CPU Usage"
+      condition:
+        metric: "cpu_usage"
+        operator: "<"
+        threshold: 30.0
+        duration: "10m"
+      action: "scale_down"
+      parameters:
+        replicas_decrease: 1
+        min_replicas: 2
+      confidence_threshold: 85.0
+
+  # Memory-based policies
+  memory_scaling:
+    - name: "High Memory Usage"
+      condition:
+        metric: "memory_usage"
+        operator: ">"
+        threshold: 90.0
+        duration: "3m"
+      action: "scale_up"
+      parameters:
+        replicas_increase: 2
+        max_replicas: 10
+      confidence_threshold: 85.0
+
+    - name: "Memory Leak Detection"
+      condition:
+        metric: "memory_usage"
+        operator: ">"
+        threshold: 95.0
+        duration: "2m"
+      action: "restart_pod"
+      parameters:
+        restart_strategy: "rolling"
+      confidence_threshold: 90.0
+
+  # Error rate policies
+  error_handling:
+    - name: "High Error Rate"
+      condition:
+        metric: "error_rate"
+        operator: ">"
+        threshold: 15.0
+        duration: "5m"
+      action: "rollback"
+      parameters:
+        rollback_version: "previous"
+      confidence_threshold: 75.0
+
+    - name: "Critical Error Rate"
+      condition:
+        metric: "error_rate"
+        operator: ">"
+        threshold: 50.0
+        duration: "1m"
+      action: "emergency_rollback"
+      parameters:
+        rollback_version: "stable"
+        notify: true
+      confidence_threshold: 95.0
+
+  # Latency policies
+  latency_optimization:
+    - name: "High Latency"
+      condition:
+        metric: "http_latency"
+        operator: ">"
+        threshold: 2000.0
+        duration: "5m"
+      action: "scale_up"
+      parameters:
+        replicas_increase: 1
+        max_replicas: 8
+      confidence_threshold: 80.0
+
+    - name: "Critical Latency"
+      condition:
+        metric: "http_latency"
+        operator: ">"
+        threshold: 5000.0
+        duration: "2m"
+      action: "restart_and_scale"
+      parameters:
+        restart_strategy: "rolling"
+        replicas_increase: 2
+      confidence_threshold: 90.0
+
+  # Pod health policies
+  pod_health:
+    - name: "Pod Crash Loop"
+      condition:
+        metric: "restart_count"
+        operator: ">="
+        threshold: 5
+        duration: "10m"
+      action: "rollback_and_alert"
+      parameters:
+        rollback_version: "stable"
+        notify: true
+        severity: "critical"
+      confidence_threshold: 95.0
+
+    - name: "Pod Not Ready"
+      condition:
+        metric: "pod_ready"
+        operator: "=="
+        threshold: 0
+        duration: "3m"
+      action: "restart_pod"
+      parameters:
+        restart_strategy: "immediate"
+      confidence_threshold: 80.0
+
+# Global settings
+settings:
+  # Dry run mode - set to false to enable automated actions
+  dry_run: true
+
+  # Minimum time between actions for the same service
+  action_cooldown: "5m"
+
+  # Maximum number of automated actions per hour
+  max_actions_per_hour: 10
+
+  # Require manual approval for critical actions
+  require_approval:
+    - "emergency_rollback"
+    - "restart_and_scale"
+
+  # Notification channels
+  notifications:
+    enabled: true
+    channels:
+      - "console"
+      # - "slack"
+      # - "email"
+
+  # Learning and optimization
+  learning:
+    enabled: true
+    feedback_required: false
+    optimize_thresholds: true
+    optimization_interval: "24h"

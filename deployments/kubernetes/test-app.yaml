@@ -1,0 +1,55 @@
+---
+# Test Pods for AURA to monitor
+# These pods simulate different scenarios for testing AURA's observation capabilities
+
+# Test Pod 1 - Stable nginx pod
+apiVersion: v1
+kind: Pod
+metadata:
+  name: test-pod-nginx
+  namespace: default
+  labels:
+    app: test-pod
+    type: stable
+    managed-by: aura
+spec:
+  containers:
+    - name: nginx
+      image: nginx:alpine
+      resources:
+        requests:
+          memory: "32Mi"
+          cpu: "25m"
+        limits:
+          memory: "64Mi"
+          cpu: "50m"
+
+---
+# Test Pod 2 - Crash loop pod for testing error detection
+apiVersion: v1
+kind: Pod
+metadata:
+  name: test-pod-crashloop
+  namespace: default
+  labels:
+    app: test-pod
+    type: crashloop
+    managed-by: aura
+spec:
+  restartPolicy: Always
+  containers:
+    - name: crasher
+      image: busybox
+      command:
+        [
+          "sh",
+          "-c",
+          "echo 'Starting at '$(date)' - will crash in 5s'; sleep 5; echo 'Crashing now!'; exit 1",
+        ]
+      resources:
+        requests:
+          memory: "16Mi"
+          cpu: "10m"
+        limits:
+          memory: "32Mi"
+          cpu: "25m"

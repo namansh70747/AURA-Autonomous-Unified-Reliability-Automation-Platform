@@ -1,0 +1,89 @@
+services:
+  # PostgreSQL Database
+  postgres:
+    image: postgres:15-alpine
+    container_name: aura-postgres
+    environment:
+      POSTGRES_USER: aura
+      POSTGRES_PASSWORD: aura123
+      POSTGRES_DB: aura_db
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./scripts/init-db.sql:/docker-entrypoint-initdb.d/init.sql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U aura"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - aura-network
+
+  # Prometheus
+  prometheus:
+    image: prom/prometheus:latest
+    container_name: aura-prometheus
+    ports:
+      - "9090:9090"
+    volumes:
+      - ./configs/prometheus.yml:/etc/prometheus/prometheus.yml
+      - prometheus_data:/prometheus
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+      - '--storage.tsdb.path=/prometheus'
+    depends_on:
+      - sample-app
+    networks:
+      - aura-network
+
+  # Sample Application (to monitor)
+  sample-app:
+    build:
+      context: .
+      dockerfile: examples/sample-app/Dockerfile
+    container_name: aura-sample-app
+    ports:
+      - "8080:8080"
+    environment:
+      - APP_NAME=sample-app
+      - APP_PORT=8080
+    networks:
+      - aura-network
+
+  # AURA Main Application
+  aura:
+    build:
+      context: .
+      dockerfile: deployments/docker/Dockerfile
+    container_name: aura-main
+    ports:
+      - "8081:8081"
+    volumes:
+      - ./configs:/app/configs
+      - ${HOME}/.kube_docker:/root/.kube:ro
+      - ${HOME}/.minikube:${HOME}/.minikube:ro
+      - /var/run/docker.sock:/var/run/docker.sock
+    environment:
+      - KUBECONFIG=/root/.kube/config
+      - DOCKER_HOST=unix:///var/run/docker.sock
+    depends_on:
+      postgres:
+        condition: service_healthy
+      prometheus:
+        condition: service_started
+      sample-app:
+        condition: service_started
+    networks:
+      - aura-network
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+      - "minikube:host-gateway"
+
+volumes:
+  postgres_data:
+  prometheus_data:
+
+networks:
+  aura-network:
+    driver: bridge

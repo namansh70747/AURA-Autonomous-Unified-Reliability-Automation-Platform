@@ -1,0 +1,141 @@
+---
+# PostgreSQL StatefulSet
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: postgres-config
+  namespace: default
+data:
+  POSTGRES_DB: aura_db
+  POSTGRES_USER: aura
+  POSTGRES_PASSWORD: aura123
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: postgres
+  namespace: default
+spec:
+  type: NodePort
+  ports:
+    - port: 5432
+      targetPort: 5432
+      nodePort: 30432
+  selector:
+    app: postgres
+
+---
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: postgres
+  namespace: default
+spec:
+  serviceName: postgres
+  replicas: 1
+  selector:
+    matchLabels:
+      app: postgres
+  template:
+    metadata:
+      labels:
+        app: postgres
+    spec:
+      containers:
+        - name: postgres
+          image: postgres:15-alpine
+          ports:
+            - containerPort: 5432
+              name: postgres
+          envFrom:
+            - configMapRef:
+                name: postgres-config
+          volumeMounts:
+            - name: postgres-data
+              mountPath: /var/lib/postgresql/data
+            - name: init-script
+              mountPath: /docker-entrypoint-initdb.d
+          resources:
+            requests:
+              memory: "256Mi"
+              cpu: "250m"
+            limits:
+              memory: "512Mi"
+              cpu: "500m"
+      volumes:
+        - name: init-script
+          configMap:
+            name: postgres-init
+
+  volumeClaimTemplates:
+    - metadata:
+        name: postgres-data
+      spec:
+        accessModes: ["ReadWriteOnce"]
+        resources:
+          requests:
+            storage: 1Gi
+
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: postgres-init
+  namespace: default
+data:
+  init.sql: |
+    -- AURA Database Schema
+
+    CREATE TABLE IF NOT EXISTS metrics (
+        id BIGSERIAL PRIMARY KEY,
+        timestamp TIMESTAMPTZ NOT NULL,
+        service_name VARCHAR(255) NOT NULL,
+        metric_name VARCHAR(255) NOT NULL,
+        metric_value DOUBLE PRECISION NOT NULL,
+        labels JSONB,
+        created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
+    );
+
+    CREATE INDEX IF NOT EXISTS idx_metrics_service_time 
+        ON metrics(service_name, timestamp DESC);
+    CREATE INDEX IF NOT EXISTS idx_metrics_name_time 
+        ON metrics(metric_name, timestamp DESC);
+    CREATE INDEX IF NOT EXISTS idx_metrics_timestamp 
+        ON metrics(timestamp DESC);
+    CREATE INDEX IF NOT EXISTS idx_metrics_labels 
+        ON metrics USING GIN(labels);
+
+    CREATE TABLE IF NOT EXISTS events (
+        id BIGSERIAL PRIMARY KEY,
+        timestamp TIMESTAMPTZ NOT NULL,
+        event_type VARCHAR(100) NOT NULL,
+        pod_name VARCHAR(255) NOT NULL,
+        namespace VARCHAR(100) NOT NULL,
+        message TEXT,
+        created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
+    );
+
+    CREATE INDEX IF NOT EXISTS idx_events_pod_time 
+        ON events(pod_name, timestamp DESC);
+    CREATE INDEX IF NOT EXISTS idx_events_type_time 
+        ON events(event_type, timestamp DESC);
+
+    CREATE TABLE IF NOT EXISTS decisions (
+        id BIGSERIAL PRIMARY KEY,
+        timestamp TIMESTAMPTZ NOT NULL,
+        pattern_detected VARCHAR(255) NOT NULL,
+        action_type VARCHAR(100) NOT NULL,
+        confidence DOUBLE PRECISION NOT NULL,
+        reason TEXT,
+        parameters JSONB,
+        executed BOOLEAN DEFAULT FALSE,
+        created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
+    );
+
+    CREATE INDEX IF NOT EXISTS idx_decisions_timestamp 
+        ON decisions(timestamp DESC);
+    CREATE INDEX IF NOT EXISTS idx_decisions_pattern 
+        ON decisions(pattern_detected);
+    CREATE INDEX IF NOT EXISTS idx_decisions_executed 
+        ON decisions(executed, timestamp DESC);
