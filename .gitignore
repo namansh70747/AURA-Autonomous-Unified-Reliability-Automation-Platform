@@ -1,0 +1,261 @@
+# ─────────────────────────────────────────────────────────────────────────────
+# AURA Autonomous Unified Reliability Automation Platform - .gitignore
+# ─────────────────────────────────────────────────────────────────────────────
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# BUILD AND COMPILATION
+# ═══════════════════════════════════════════════════════════════════════════════
+
+# Go binaries
+bin/
+dist/
+*.exe
+*.dll
+*.so
+*.dylib
+/aura
+/sample-app
+
+# Go build cache
+.cache/
+.go-mod/
+
+# Build artifacts
+*.o
+*.a
+*.out
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# KUBERNETES AND MINIKUBE
+# ═══════════════════════════════════════════════════════════════════════════════
+
+# Minikube configuration (local cluster, not production)
+.minikube/
+.kube/
+.kube_docker/
+
+# Kubernetes credentials and secrets
+kubeconfig
+kubeconfig-*
+*.kubeconfig
+kubeconfig.yml
+kubeconfig.yaml
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# DOCKER AND CONTAINERIZATION
+# ═══════════════════════════════════════════════════════════════════════════════
+
+# Docker compose override files
+docker-compose.override.yml
+docker-compose.local.yml
+
+# Docker volumes and data
+docker-volume-*/
+volumes/
+docker-data/
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# DATABASE
+# ═══════════════════════════════════════════════════════════════════════════════
+
+# PostgreSQL data
+postgres_data/
+pgdata/
+*.db
+*.sqlite
+*.sqlite3
+
+# Database backups
+*.sql.bak
+*.sql.gz
+dump.sql
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# LOGGING AND MONITORING
+# ═══════════════════════════════════════════════════════════════════════════════
+
+# Prometheus data and configuration
+prometheus_data/
+prometheus/
+*.prom
+
+# Application logs
+logs/
+*.log
+*.log.*
+access.log
+error.log
+debug.log
+
+# PID files
+*.pid
+*.pidlock
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# ENVIRONMENT AND CONFIGURATION
+# ═══════════════════════════════════════════════════════════════════════════════
+
+# Environment variables
+.env
+.env.local
+.env.*.local
+.env.production.local
+.env.development.local
+
+# Configuration overrides (local development)
+configs/local/
+configs/*.local.yaml
+configs/*.local.yml
+local-config.yaml
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# IDE AND EDITOR
+# ═══════════════════════════════════════════════════════════════════════════════
+
+# VS Code
+.vscode/
+*.code-workspace
+
+# JetBrains IDEs
+.idea/
+*.iml
+*.iws
+*.ipr
+out/
+
+# Sublime Text
+*.sublime-project
+*.sublime-workspace
+
+# Vim/Neovim
+.vim/
+*.swp
+*.swo
+*~
+.netrwhist
+
+# Emacs
+*~
+\#*\#
+.\#*
+
+# macOS
+.DS_Store
+.AppleDouble
+.LSOverride
+._*
+.Spotlight-V100
+.Trashes
+
+# Windows
+Thumbs.db
+Desktop.ini
+ehthumbs.db
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# TEMPORARY AND CACHE FILES
+# ═══════════════════════════════════════════════════════════════════════════════
+
+# Temporary files
+tmp/
+temp/
+*.tmp
+*.temp
+
+# Cache directories
+.cache/
+.pytest_cache/
+__pycache__/
+*.pyc
+*.pyo
+
+# Node modules (if any)
+node_modules/
+npm-debug.log
+yarn-error.log
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# TESTING
+# ═══════════════════════════════════════════════════════════════════════════════
+
+# Test coverage
+coverage/
+*.cover
+*.coverage
+.coverage
+coverage.txt
+
+# Test artifacts
+test-results/
+test-output/
+*.test.log
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# SECURITY AND SENSITIVE DATA
+# ═══════════════════════════════════════════════════════════════════════════════
+
+# Credentials and secrets
+*.key
+*.pem
+*.pfx
+*.p12
+secret*
+credentials*
+private*
+.ssh/
+
+# API keys and tokens
+*_token
+*_secret
+*_password
+.auth
+authconfig
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# DEPLOYMENT AND RELEASE
+# ═══════════════════════════════════════════════════════════════════════════════
+
+# Build output
+build/
+releases/
+release/
+dist/
+
+# Deployment artifacts
+deploy/output/
+*.tar.gz
+*.zip
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# SYSTEM AND OS FILES
+# ═══════════════════════════════════════════════════════════════════════════════
+
+# Linux
+.directory
+
+# Archive files (unless tracked)
+*.zip
+*.7z
+*.rar
+*.tar
+*.tar.gz
+*.tar.bz2
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# PROJECT SPECIFIC
+# ═══════════════════════════════════════════════════════════════════════════════
+
+# AURA specific files
+aura.pid
+aura-*.log
+metrics-dump.*
+
+# Makefile generated files
+.make-flags
+
+# Go modules
+go.sum
+
+# Local development scripts
+scripts/local/
+scripts/*.local.sh
