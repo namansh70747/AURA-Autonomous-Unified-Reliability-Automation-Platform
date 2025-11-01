@@ -106,6 +106,7 @@ debug.log
 configs/local/
 configs/*.local.yaml
 configs/*.local.yml
+configs/*.local
 local-config.yaml
 
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -259,3 +260,6 @@ go.sum
 # Local development scripts
 scripts/local/
 scripts/*.local.sh
+configs/prometheus.yml.local
+configs/*.local.yml
+configs/prometheus.yml.local

@@ -61,7 +61,7 @@ func main() {
 		k8sNamespace,
 		db,
 		logger.Log,
-	)
+	) //metriObserver start kardiya here
 	if err != nil {
 		logger.Fatal("Metrics observer init failed", zap.Error(err))
 	}
@@ -73,7 +73,7 @@ func main() {
 		if err := metricsObserver.Start(observerCtx); err != nil && err != context.Canceled {
 			logger.Error("Observer error", zap.Error(err))
 		}
-	}()
+	}() //ek alag goroutine me start kar diya observer ko
 
 	if config.Kubernetes.Enabled {
 		logger.Info("K8s watcher enabled", zap.String("namespace", k8sNamespace))
@@ -239,16 +239,41 @@ func getServiceMetricsHandler(db *storage.PostgresClient) gin.HandlerFunc {
 		ctx, cancel := context.WithTimeout(c.Request.Context(), 5*time.Second)
 		defer cancel()
 
-		metricTypes := []string{"cpu_usage", "memory_usage", "http_requests"}
-		currentMetrics := make(map[string]float64)
+		// Try both metric name formats (with and without _total suffix)
+		metricVariants := map[string][]string{
+			"cpu_usage":     {"cpu_usage", "cpu_usage_percent"},
+			"memory_usage":  {"memory_usage", "memory_usage_percent"},
+			"http_requests": {"http_requests", "http_requests_total"},
+		}
 
-		for _, metricType := range metricTypes {
-			metric, err := db.GetLatestMetric(ctx, serviceName, metricType)
-			if err != nil {
-				continue
+		currentMetrics := make(map[string]float64)
+		failedMetrics := []string{}
+
+		for displayName, variants := range metricVariants {
+			metricFound := false
+
+			for _, metricType := range variants {
+				metric, err := db.GetLatestMetric(ctx, serviceName, metricType)
+				if err == nil && metric != nil {
+					currentMetrics[displayName] = metric.MetricValue
+					metricFound = true
+					logger.Debug("Metric found",
+						zap.String("service", serviceName),
+						zap.String("display_name", displayName),
+						zap.String("actual_name", metricType),
+						zap.Float64("value", metric.MetricValue),
+					)
+					break
+				}
 			}
-			if metric != nil {
-				currentMetrics[metricType] = metric.MetricValue
+
+			if !metricFound {
+				failedMetrics = append(failedMetrics, displayName)
+				logger.Debug("No metric data found",
+					zap.String("service", serviceName),
+					zap.String("metric", displayName),
+					zap.Strings("tried_variants", variants),
+				)
 			}
 		}
 
@@ -259,11 +284,18 @@ func getServiceMetricsHandler(db *storage.PostgresClient) gin.HandlerFunc {
 			return
 		}
 
-		c.JSON(http.StatusOK, gin.H{
+		response := gin.H{
 			"service_name": serviceName,
 			"timestamp":    time.Now().Format(time.RFC3339),
 			"metrics":      currentMetrics,
-		})
+		}
+
+		// Include information about which metrics were missing
+		if len(failedMetrics) > 0 {
+			response["missing_metrics"] = failedMetrics
+		}
+
+		c.JSON(http.StatusOK, response)
 	}
 }
 
