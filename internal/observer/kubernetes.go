@@ -45,18 +45,25 @@ func NewKubernetesWatcher(namespace string, db *storage.PostgresClient, logger *
 	}
 
 	watcher.clientset = clientset
-	watcher.enabled = true
+	watcher.enabled = true 
 
 	return watcher, nil
 }
 
 func (k *KubernetesWatcher) createKubernetesClient() (*kubernetes.Clientset, error) {
-	config, err := rest.InClusterConfig()
+	config, err := rest.InClusterConfig() 
+	/* 
+	"Hey Kubernetes… am I already running inside your cluster as a pod?"
+	If answer = YES (we are inside K8s):
+	then Kubernetes will automatically give you the credentials (token, certs)
+	and this function gives you a ready config to talk to API server.
+	→ then we return clientset
+	*/
 	if err == nil {
-		return kubernetes.NewForConfig(config)
+		return kubernetes.NewForConfig(config) // We are Making the clinetset Object that csan perform tasks that the kubernetes need to perfoem or we want the kubernetes to perform 
 	}
 
-	kubeconfigPath := os.Getenv("KUBECONFIG")
+	kubeconfigPath := os.Getenv("KUBECONFIG") //Docker Compose mai set kar rakhi hai maine 
 	if kubeconfigPath == "" {
 		home, err := os.UserHomeDir()
 		if err != nil {
@@ -74,7 +81,7 @@ func (k *KubernetesWatcher) createKubernetesClient() (*kubernetes.Clientset, err
 		return nil, fmt.Errorf("failed to build kubeconfig: %w", err)
 	}
 
-	return kubernetes.NewForConfig(config)
+	return kubernetes.NewForConfig(config) //Yeh Wali Apni config hai jo hamne register ki hai khud se 
 }
 
 func (k *KubernetesWatcher) Start(ctx context.Context) error {
@@ -88,6 +95,7 @@ func (k *KubernetesWatcher) Start(ctx context.Context) error {
 
 	<-ctx.Done()
 	return ctx.Err()
+	// wait until context is cancelled when cancelled → return the reason why it cancelled
 }
 
 func (k *KubernetesWatcher) watchPods(ctx context.Context) {
@@ -111,14 +119,14 @@ func (k *KubernetesWatcher) watchPodsOnce(ctx context.Context) error {
 	})
 	if err != nil {
 		return fmt.Errorf("failed to watch pods: %w", err)
-	}
+	} // 
 	defer watcher.Stop()
 
 	for {
 		select {
 		case <-ctx.Done():
 			return ctx.Err()
-		case event, ok := <-watcher.ResultChan():
+		case event, ok := <-watcher.ResultChan(): // This is Giving Kubernetes Event 
 			if !ok {
 				return fmt.Errorf("watch channel closed")
 			}
@@ -132,6 +140,17 @@ func (k *KubernetesWatcher) watchPodsOnce(ctx context.Context) error {
 
 func (k *KubernetesWatcher) handlePodEvent(ctx context.Context, event watch.Event) error {
 	pod, ok := event.Object.(*corev1.Pod)
+	/*
+	Because Kubernetes watch can send different types of objects.
+	So before using, we must check:	
+	Example things that cause events:
+	a pod got created.
+	a pod got deleted.
+	a pod crashed.
+	image pull failed.
+	container restarted.
+	scheduler moved a pod. 
+	*/ 
 	if !ok {
 		return fmt.Errorf("unexpected object type: %T", event.Object)
 	}
@@ -145,7 +164,7 @@ func (k *KubernetesWatcher) handlePodEvent(ctx context.Context, event watch.Even
 		PodName:   pod.Name,
 		Namespace: pod.Namespace,
 		Message:   message,
-	}
+	} //Yeh Sabh de diya maine 
 
 	if err := k.db.SaveEvent(ctx, storageEvent); err != nil {
 		return fmt.Errorf("failed to save event: %w", err)
@@ -242,7 +261,7 @@ func (k *KubernetesWatcher) buildEventMessage(pod *corev1.Pod, eventType string)
 	default:
 		return fmt.Sprintf("Pod %s event: %s", pod.Name, eventType)
 	}
-}
+} // Build Event Messages 
 
 func (k *KubernetesWatcher) getPodRestarts(pod *corev1.Pod) int32 {
 	var restarts int32

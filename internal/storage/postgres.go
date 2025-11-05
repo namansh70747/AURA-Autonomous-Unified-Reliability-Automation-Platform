@@ -88,28 +88,29 @@ func (c *PostgresClient) GetRecentMetrics(
 	ctx context.Context,
 	serviceName string,
 	metricName string,
-	duration time.Duration,
+	duration time.Duration, 
 ) ([]*Metric, error) {
 	query := `
 		SELECT id, timestamp, service_name, metric_name, metric_value, labels, created_at
 		FROM metrics
 		WHERE service_name = $1
 		  AND metric_name = $2
-		  AND timestamp > $3
+		  AND timestamp > $3 
 		ORDER BY timestamp DESC
 		LIMIT 1000
 	`
-
+	// what is this timestamp for ? answer is that it is used to get the recent metrics in a duration
+	// we ar ordering 
 	ctx, cancel := context.WithTimeout(ctx, 10*time.Second)
 	defer cancel()
-
-	since := time.Now().Add(-duration)
-	rows, err := c.pool.Query(ctx, query, serviceName, metricName, since)
+	//since := time.Now().Add(-duration) this is getting the time from duration means how, answer is it is getting the time from now and subtracting the duration from it
+	since := time.Now().Add(-duration) //we have added duration here because we are getting recent metrics in a duration
+	rows, err := c.pool.Query(ctx, query, serviceName, metricName, since) // so this are getting the rows from the database on the basis of service name , metric name and since time
 	if err != nil {
 		return nil, fmt.Errorf("failed to query metrics: %w", err)
 	}
 	defer rows.Close()
-
+// means latest se purane ki taraf jaa rhe hain hum 
 	var metrics []*Metric
 	for rows.Next() {
 		var m Metric
@@ -193,14 +194,14 @@ func (c *PostgresClient) SaveEvent(ctx context.Context, event *Event) error {
 func (c *PostgresClient) BatchSaveMetrics(ctx context.Context, metrics []*Metric) error {
 	if len(metrics) == 0 {
 		return nil
-	}
+	}// length of metrics and it is given above the metrics and and their features
 
-	ctx, cancel := context.WithTimeout(ctx, 30*time.Second)
+	ctx, cancel := context.WithTimeout(ctx, 30*time.Second)// this is context
 	defer cancel()
-
-	rows := make([][]any, 0, len(metrics))
+	// rows := make([][]any, 0, len(metrics)) this is 2d array and in the brackets we are giving the length of metrics and 0 is the initial capacity and len of metrics is the maximum capacity
+	rows := make([][]any, 0, len(metrics))// this is 2d array of any type and it's features are given below like timestamp , service name , metric name , metric value , labels
 	for _, metric := range metrics {
-		rows = append(rows, []any{
+		rows = append(rows, []any{ // How we are appending the rows here is []any{ } means that it is of any type and then we are giving the features of metric like timestamp , service name , metric name , metric value , labels
 			metric.Timestamp,
 			metric.ServiceName,
 			metric.MetricName,
@@ -214,14 +215,14 @@ func (c *PostgresClient) BatchSaveMetrics(ctx context.Context, metrics []*Metric
 		pgx.Identifier{"metrics"},
 		[]string{"timestamp", "service_name", "metric_name", "metric_value", "labels"},
 		pgx.CopyFromRows(rows),
-	)
+	)// all at once chala jayega 
 	if err != nil {
 		return fmt.Errorf("failed to copy metrics: %w", err)
 	}
-	_ = copyCount
+	_ = copyCount //we have written this to avoid unused variable error
 
 	return nil
-}
+}// batch metrics is doing that it is moving on the collected metrics and then it is appending the each metric features like timestamp , service name , metric name , metric value , labels and then it is copying all at once into rows and then the rows are appended into the database at once
 
 func (c *PostgresClient) GetPoolStats() *pgxpool.Stat {
 	return c.pool.Stat()
@@ -243,7 +244,7 @@ func (c *PostgresClient) GetLatestMetric(
 
 	ctx, cancel := context.WithTimeout(ctx, 3*time.Second)
 	defer cancel()
-
+	//difference between get latest and get recent is that get latest is giving only one latest metric and get recent is giving multiple metrics in a duration
 	var metric Metric
 	err := c.pool.QueryRow(ctx, query, serviceName, metricName).Scan(
 		&metric.ID,
@@ -262,7 +263,7 @@ func (c *PostgresClient) GetLatestMetric(
 		return nil, fmt.Errorf("failed to get latest metric: %w", err)
 	}
 
-	return &metric, nil
+	return &metric, nil //kisi bhi metric ki latest value de raha hai ye function
 }
 
 func (c *PostgresClient) GetMetricStatistics(

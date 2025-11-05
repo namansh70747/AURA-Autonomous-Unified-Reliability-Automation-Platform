@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/gin-gonic/gin"
+	"github.com/namansh70747/AURA-Autonomous-Unified-Reliability-Automation-Platform/internal/analyzer"
 	"github.com/namansh70747/AURA-Autonomous-Unified-Reliability-Automation-Platform/internal/core"
 	"github.com/namansh70747/AURA-Autonomous-Unified-Reliability-Automation-Platform/internal/observer"
 	"github.com/namansh70747/AURA-Autonomous-Unified-Reliability-Automation-Platform/internal/storage"
@@ -65,6 +66,10 @@ func main() {
 	if err != nil {
 		logger.Fatal("Metrics observer init failed", zap.Error(err))
 	}
+
+	// Initialize Pattern Analyzer (Phase 2)
+	patternAnalyzer := analyzer.NewAnalyzer(db)
+	logger.Info("Pattern analyzer initialized successfully")
 
 	observerCtx, observerCancel := context.WithCancel(context.Background())
 	defer observerCancel()
@@ -124,6 +129,10 @@ func main() {
 		v1.GET("/prometheus/targets", prometheusTargetsHandler(metricsObserver))
 		v1.GET("/prometheus/query", prometheusQueryHandler(metricsObserver))
 		v1.GET("/prometheus/metrics/summary", prometheusMetricsSummaryHandler(db))
+
+		// Phase 2: Pattern Analysis Endpoints
+		v1.GET("/analyze/:service", analyzeServiceHandler(patternAnalyzer))
+		v1.GET("/analyze/all", analyzeAllServicesHandler(patternAnalyzer, db))
 	}
 
 	srv := &http.Server{
@@ -815,3 +824,91 @@ func prometheusMetricsSummaryHandler(db *storage.PostgresClient) gin.HandlerFunc
 		})
 	}
 }
+
+// analyzeServiceHandler triggers analysis for a specific service
+func analyzeServiceHandler(analyzer *analyzer.Analyzer) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		serviceName := c.Param("service")
+
+		ctx, cancel := context.WithTimeout(c.Request.Context(), 15*time.Second)
+		defer cancel()
+
+		logger.Info("Analyzing service via API",
+			zap.String("service", serviceName),
+			zap.String("client_ip", c.ClientIP()),
+		)
+
+		diagnosis, err := analyzer.AnalyzeService(ctx, serviceName)
+		if err != nil {
+			logger.Error("Analysis failed",
+				zap.String("service", serviceName),
+				zap.Error(err),
+			)
+			c.JSON(http.StatusInternalServerError, gin.H{
+				"error": fmt.Sprintf("Analysis failed: %v", err),
+			})
+			return
+		}
+
+		c.JSON(http.StatusOK, gin.H{
+			"service":     serviceName,
+			"diagnosis":   diagnosis,
+			"analyzed_at": time.Now().Format(time.RFC3339),
+		})
+	}
+}
+
+// analyzeAllServicesHandler analyzes all known services
+func analyzeAllServicesHandler(analyzer *analyzer.Analyzer, db *storage.PostgresClient) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		ctx, cancel := context.WithTimeout(c.Request.Context(), 30*time.Second)
+		defer cancel()
+
+		logger.Info("Analyzing all services via API",
+			zap.String("client_ip", c.ClientIP()),
+		)
+
+		// Get list of services from database
+		services, err := db.GetAllServices(ctx)
+		if err != nil {
+			logger.Error("Failed to get services list", zap.Error(err))
+			c.JSON(http.StatusInternalServerError, gin.H{
+				"error": "Failed to get services list",
+			})
+			return
+		}
+
+		if len(services) == 0 {
+			logger.Warn("No services found in database")
+			c.JSON(http.StatusOK, gin.H{
+				"total_services": 0,
+				"services":       []string{},
+				"diagnoses":      map[string]interface{}{},
+				"message":        "No services found. Ensure metrics are being collected.",
+			})
+			return
+		}
+
+		// Analyze all services
+		results, err := analyzer.AnalyzeAllServices(ctx, services)
+		if err != nil {
+			logger.Error("Bulk analysis failed", zap.Error(err))
+			c.JSON(http.StatusInternalServerError, gin.H{
+				"error": "Analysis failed",
+			})
+			return
+		}
+
+		logger.Info("Bulk analysis complete",
+			zap.Int("services_analyzed", len(results)),
+		)
+
+		c.JSON(http.StatusOK, gin.H{
+			"total_services": len(services),
+			"services":       services,
+			"diagnoses":      results,
+			"analyzed_at":    time.Now().Format(time.RFC3339),
+		})
+	}
+}
+

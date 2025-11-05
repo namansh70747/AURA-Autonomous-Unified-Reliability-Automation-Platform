@@ -1,5 +1,4 @@
 services:
-  # PostgreSQL Database
   postgres:
     image: postgres:15-alpine
     container_name: aura-postgres
@@ -8,7 +7,7 @@ services:
       POSTGRES_PASSWORD: aura123
       POSTGRES_DB: aura_db
     ports:
-      - "5432:5432"
+      - "5432:5432" 
     volumes:
       - postgres_data:/var/lib/postgresql/data
       - ./scripts/init-db.sql:/docker-entrypoint-initdb.d/init.sql
@@ -20,7 +19,24 @@ services:
     networks:
       - aura-network
 
-  # Prometheus
+  pgadmin:
+    image: dpage/pgadmin4:latest
+    container_name: aura-pgadmin
+    environment:
+      PGADMIN_DEFAULT_EMAIL: admin@aura.com
+      PGADMIN_DEFAULT_PASSWORD: admin123
+      PGADMIN_CONFIG_SERVER_MODE: 'False'
+      PGADMIN_CONFIG_MASTER_PASSWORD_REQUIRED: 'False'
+    ports:
+      - "5050:80"
+    volumes:
+      - pgadmin_data:/var/lib/pgadmin
+    depends_on:
+      - postgres
+    networks:
+      - aura-network
+    restart: unless-stopped
+
   prometheus:
     image: prom/prometheus:latest
     container_name: aura-prometheus
@@ -32,12 +48,34 @@ services:
     command:
       - '--config.file=/etc/prometheus/prometheus.yml'
       - '--storage.tsdb.path=/prometheus'
+      - '--web.enable-lifecycle'
     depends_on:
       - sample-app
     networks:
       - aura-network
 
-  # Sample Application (to monitor)
+  grafana:
+    image: grafana/grafana:latest
+    container_name: aura-grafana
+    ports:
+      - "3000:3000"
+    environment:
+      - GF_SECURITY_ADMIN_USER=admin
+      - GF_SECURITY_ADMIN_PASSWORD=admin123
+      - GF_USERS_ALLOW_SIGN_UP=false
+      - GF_SERVER_ROOT_URL=http://localhost:3000
+      - GF_INSTALL_PLUGINS=grafana-clock-panel,grafana-simple-json-datasource,grafana-piechart-panel
+    volumes:
+      - grafana_data:/var/lib/grafana
+      - ./configs/grafana/provisioning:/etc/grafana/provisioning
+      - ./configs/grafana/dashboards:/var/lib/grafana/dashboards
+    depends_on:
+      - prometheus
+      - postgres
+    networks:
+      - aura-network
+    restart: unless-stopped
+
   sample-app:
     build:
       context: .
@@ -51,7 +89,6 @@ services:
     networks:
       - aura-network
 
-  # AURA Main Application
   aura:
     build:
       context: .
@@ -83,6 +120,8 @@ services:
 volumes:
   postgres_data:
   prometheus_data:
+  pgadmin_data:
+  grafana_data:
 
 networks:
   aura-network:
