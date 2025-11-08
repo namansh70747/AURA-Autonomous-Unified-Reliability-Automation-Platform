@@ -1,4 +1,4 @@
-# AURA Main Configuration
+# AURA Configuration (for Docker deployment)
 
 # Application settings
 app:
@@ -8,7 +8,7 @@ app:
 
 # PostgreSQL connection
 database:
-  host: "postgres" # Docker service name (use 'localhost' for local dev)
+  host: "postgres" # Docker service name
   port: 5432
   user: "aura"
   password: "aura123"
@@ -17,7 +17,7 @@ database:
 
 # Prometheus connection
 prometheus:
-  url: "http://prometheus:9090" # Docker service name (use 'http://localhost:9090' for local dev)
+  url: "http://prometheus:9090" # Docker service name
   scrape_interval: "10s"
 
 # Kubernetes watcher settings

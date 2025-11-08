@@ -74,14 +74,18 @@ func main() {
 	observerCtx, observerCancel := context.WithCancel(context.Background())
 	defer observerCancel()
 
+	// Start metrics observer which internally starts both Prometheus and Kubernetes watchers
 	go func() {
 		if err := metricsObserver.Start(observerCtx); err != nil && err != context.Canceled {
 			logger.Error("Observer error", zap.Error(err))
 		}
-	}() //ek alag goroutine me start kar diya observer ko
+	}()
 
+	// Log Kubernetes watcher status
 	if config.Kubernetes.Enabled {
-		logger.Info("K8s watcher enabled", zap.String("namespace", k8sNamespace))
+		logger.Info("Kubernetes watcher initialized and started", zap.String("namespace", k8sNamespace))
+	} else {
+		logger.Info("Kubernetes watcher disabled in config")
 	}
 
 	go startConsoleMonitor(db, logger.Log)
@@ -911,4 +915,3 @@ func analyzeAllServicesHandler(analyzer *analyzer.Analyzer, db *storage.Postgres
 		})
 	}
 }
-

@@ -5,7 +5,6 @@ import (
 	"time"
 )
 
-// Metric represents a time-series metric data point
 type Metric struct {
 	ID          int64           `json:"id"`
 	Timestamp   time.Time       `json:"timestamp"`
@@ -16,7 +15,6 @@ type Metric struct {
 	CreatedAt   time.Time       `json:"created_at"`
 }
 
-// MetricStats represents statistical analysis of metrics
 type MetricStats struct {
 	ServiceName string        `json:"service_name"`
 	MetricName  string        `json:"metric_name"`
@@ -39,7 +37,6 @@ type Event struct {
 	CreatedAt time.Time `json:"created_at"`
 }
 
-// Decision represents an AURA decision
 type Decision struct {
 	ID              int64           `json:"id"`
 	Timestamp       time.Time       `json:"timestamp"`
@@ -52,7 +49,6 @@ type Decision struct {
 	CreatedAt       time.Time       `json:"created_at"`
 }
 
-// DecisionStats represents decision statistics
 type DecisionStats struct {
 	Total         int64   `json:"total"`
 	Executed      int64   `json:"executed"`

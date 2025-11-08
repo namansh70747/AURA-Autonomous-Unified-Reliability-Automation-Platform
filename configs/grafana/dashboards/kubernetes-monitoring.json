@@ -1,0 +1,449 @@
+{
+    "title": "☸️ AURA Kubernetes Monitoring",
+    "description": "Complete Kubernetes cluster and pod monitoring",
+    "tags": [
+        "aura",
+        "kubernetes",
+        "pods",
+        "cluster"
+    ],
+    "timezone": "browser",
+    "editable": true,
+    "time": {
+        "from": "now-1h",
+        "to": "now"
+    },
+    "refresh": "10s",
+    "panels": [
+        {
+            "id": 1,
+            "title": "🎯 Cluster Overview",
+            "type": "stat",
+            "gridPos": {
+                "x": 0,
+                "y": 0,
+                "w": 24,
+                "h": 5
+            },
+            "datasource": {
+                "type": "grafana-postgresql-datasource",
+                "uid": "PostgreSQL"
+            },
+            "targets": [
+                {
+                    "rawSql": "WITH latest_pods AS (\n  SELECT DISTINCT ON (service_name)\n    service_name,\n    labels->>'phase' as phase,\n    COALESCE((labels->>'ready')::boolean, false) as ready,\n    timestamp\n  FROM metrics\n  WHERE metric_name = 'pod_status'\n    AND timestamp > NOW() - INTERVAL '10 minutes'\n  ORDER BY service_name, timestamp DESC\n)\nSELECT 'Total Pods' as metric, COUNT(*) as value FROM latest_pods\nUNION ALL\nSELECT 'Running' as metric, COUNT(*) as value FROM latest_pods WHERE phase = 'Running'\nUNION ALL\nSELECT 'Failed' as metric, COUNT(*) as value FROM latest_pods WHERE phase = 'Failed'\nUNION ALL\nSELECT 'Pending' as metric, COUNT(*) as value FROM latest_pods WHERE phase = 'Pending'\nUNION ALL\nSELECT 'Ready Pods' as metric, COUNT(*) as value FROM latest_pods WHERE ready = true",
+                    "format": "table",
+                    "refId": "A"
+                }
+            ],
+            "fieldConfig": {
+                "defaults": {
+                    "unit": "short",
+                    "color": {
+                        "mode": "palette-classic"
+                    },
+                    "noValue": "No pods deployed - Run: make k8s-deploy-sample-app"
+                }
+            },
+            "options": {
+                "graphMode": "area",
+                "colorMode": "value",
+                "orientation": "horizontal",
+                "textMode": "value_and_name"
+            }
+        },
+        {
+            "id": 2,
+            "title": "Pod Status Distribution",
+            "type": "piechart",
+            "gridPos": {
+                "x": 0,
+                "y": 5,
+                "w": 12,
+                "h": 12
+            },
+            "datasource": {
+                "type": "grafana-postgresql-datasource",
+                "uid": "PostgreSQL"
+            },
+            "targets": [
+                {
+                    "rawSql": "WITH latest_status AS (\n  SELECT DISTINCT ON (service_name)\n    service_name,\n    labels->>'phase' as phase,\n    timestamp\n  FROM metrics\n  WHERE metric_name = 'pod_status'\n    AND timestamp > NOW() - INTERVAL '10 minutes'\n  ORDER BY service_name, timestamp DESC\n)\nSELECT \n  phase as metric,\n  COUNT(*) as value\nFROM latest_status\nWHERE phase IS NOT NULL\nGROUP BY phase",
+                    "format": "table",
+                    "refId": "A"
+                }
+            ],
+            "options": {
+                "legend": {
+                    "displayMode": "table",
+                    "placement": "right",
+                    "calcs": [
+                        "sum",
+                        "percent"
+                    ],
+                    "values": [
+                        "value",
+                        "percent"
+                    ]
+                },
+                "pieType": "donut",
+                "tooltip": {
+                    "mode": "multi"
+                },
+                "displayLabels": [
+                    "name",
+                    "percent"
+                ]
+            },
+            "fieldConfig": {
+                "defaults": {
+                    "color": {
+                        "mode": "palette-classic"
+                    },
+                    "custom": {
+                        "hideFrom": {
+                            "tooltip": false,
+                            "viz": false,
+                            "legend": false
+                        }
+                    }
+                },
+                "overrides": [
+                    {
+                        "matcher": {
+                            "id": "byName",
+                            "options": "Running"
+                        },
+                        "properties": [
+                            {
+                                "id": "color",
+                                "value": {
+                                    "fixedColor": "green",
+                                    "mode": "fixed"
+                                }
+                            }
+                        ]
+                    },
+                    {
+                        "matcher": {
+                            "id": "byName",
+                            "options": "Pending"
+                        },
+                        "properties": [
+                            {
+                                "id": "color",
+                                "value": {
+                                    "fixedColor": "yellow",
+                                    "mode": "fixed"
+                                }
+                            }
+                        ]
+                    },
+                    {
+                        "matcher": {
+                            "id": "byName",
+                            "options": "Failed"
+                        },
+                        "properties": [
+                            {
+                                "id": "color",
+                                "value": {
+                                    "fixedColor": "red",
+                                    "mode": "fixed"
+                                }
+                            }
+                        ]
+                    }
+                ]
+            }
+        },
+        {
+            "id": 3,
+            "title": "Pod Health Status",
+            "type": "table",
+            "gridPos": {
+                "x": 12,
+                "y": 5,
+                "w": 12,
+                "h": 12
+            },
+            "datasource": {
+                "type": "grafana-postgresql-datasource",
+                "uid": "PostgreSQL"
+            },
+            "targets": [
+                {
+                    "rawSql": "WITH latest_status AS (\n  SELECT DISTINCT ON (service_name)\n    service_name,\n    COALESCE(labels->>'phase', 'Unknown') as phase,\n    COALESCE((labels->>'ready')::boolean, false) as ready,\n    timestamp\n  FROM metrics\n  WHERE metric_name = 'pod_status'\n    AND timestamp > NOW() - INTERVAL '10 minutes'\n  ORDER BY service_name, timestamp DESC\n),\nlatest_restarts AS (\n  SELECT DISTINCT ON (service_name)\n    service_name,\n    COALESCE(metric_value, 0)::integer as restarts\n  FROM metrics\n  WHERE metric_name = 'pod_restarts'\n    AND timestamp > NOW() - INTERVAL '10 minutes'\n  ORDER BY service_name, timestamp DESC\n)\nSELECT \n  ls.service_name as \"Pod Name\",\n  ls.phase as \"Status\",\n  CASE \n    WHEN ls.ready = true THEN 'Ready'\n    ELSE 'Not Ready'\n  END as \"Ready\",\n  COALESCE(lr.restarts, 0) as \"Restarts\"\nFROM latest_status ls\nLEFT JOIN latest_restarts lr ON ls.service_name = lr.service_name\nWHERE ls.service_name IS NOT NULL\nORDER BY COALESCE(lr.restarts, 0) DESC, ls.service_name\nLIMIT 50",
+                    "format": "table",
+                    "refId": "A"
+                }
+            ],
+            "options": {
+                "showHeader": true,
+                "sortBy": [
+                    {
+                        "displayName": "Restarts",
+                        "desc": true
+                    }
+                ],
+                "footer": {
+                    "show": true,
+                    "reducer": [
+                        "count"
+                    ]
+                }
+            },
+            "fieldConfig": {
+                "defaults": {
+                    "custom": {
+                        "align": "left",
+                        "filterable": true
+                    }
+                },
+                "overrides": [
+                    {
+                        "matcher": {
+                            "id": "byName",
+                            "options": "Status"
+                        },
+                        "properties": [
+                            {
+                                "id": "custom.width",
+                                "value": 120
+                            },
+                            {
+                                "id": "custom.displayMode",
+                                "value": "color-background"
+                            },
+                            {
+                                "id": "mappings",
+                                "value": [
+                                    {
+                                        "type": "value",
+                                        "options": {
+                                            "Running": {
+                                                "text": "🟢 Running",
+                                                "color": "green"
+                                            },
+                                            "Pending": {
+                                                "text": "🟡 Pending",
+                                                "color": "yellow"
+                                            },
+                                            "Failed": {
+                                                "text": "🔴 Failed",
+                                                "color": "red"
+                                            },
+                                            "Unknown": {
+                                                "text": "⚪ Unknown",
+                                                "color": "gray"
+                                            }
+                                        }
+                                    }
+                                ]
+                            }
+                        ]
+                    },
+                    {
+                        "matcher": {
+                            "id": "byName",
+                            "options": "Ready"
+                        },
+                        "properties": [
+                            {
+                                "id": "custom.width",
+                                "value": 120
+                            },
+                            {
+                                "id": "custom.displayMode",
+                                "value": "color-background"
+                            },
+                            {
+                                "id": "mappings",
+                                "value": [
+                                    {
+                                        "type": "value",
+                                        "options": {
+                                            "Ready": {
+                                                "text": "✅ Ready",
+                                                "color": "green"
+                                            },
+                                            "Not Ready": {
+                                                "text": "❌ Not Ready",
+                                                "color": "red"
+                                            }
+                                        }
+                                    }
+                                ]
+                            }
+                        ]
+                    },
+                    {
+                        "matcher": {
+                            "id": "byName",
+                            "options": "Restarts"
+                        },
+                        "properties": [
+                            {
+                                "id": "custom.width",
+                                "value": 100
+                            },
+                            {
+                                "id": "custom.displayMode",
+                                "value": "color-background"
+                            },
+                            {
+                                "id": "thresholds",
+                                "value": {
+                                    "mode": "absolute",
+                                    "steps": [
+                                        {
+                                            "value": 0,
+                                            "color": "green"
+                                        },
+                                        {
+                                            "value": 3,
+                                            "color": "yellow"
+                                        },
+                                        {
+                                            "value": 5,
+                                            "color": "orange"
+                                        },
+                                        {
+                                            "value": 10,
+                                            "color": "red"
+                                        }
+                                    ]
+                                }
+                            }
+                        ]
+                    },
+                    {
+                        "matcher": {
+                            "id": "byName",
+                            "options": "Pod Name"
+                        },
+                        "properties": [
+                            {
+                                "id": "custom.width",
+                                "value": 250
+                            }
+                        ]
+                    }
+                ]
+            }
+        },
+        {
+            "id": 4,
+            "title": "Pod Restart Timeline",
+            "type": "timeseries",
+            "gridPos": {
+                "x": 0,
+                "y": 17,
+                "w": 24,
+                "h": 10
+            },
+            "datasource": {
+                "type": "grafana-postgresql-datasource",
+                "uid": "PostgreSQL"
+            },
+            "targets": [
+                {
+                    "rawSql": "SELECT \n  timestamp as time,\n  service_name as metric,\n  metric_value as value\nFROM metrics\nWHERE metric_name = 'pod_restarts'\n  AND timestamp > NOW() - INTERVAL '2 hours'\nORDER BY timestamp",
+                    "format": "time_series",
+                    "refId": "A"
+                }
+            ],
+            "fieldConfig": {
+                "defaults": {
+                    "unit": "short",
+                    "color": {
+                        "mode": "palette-classic"
+                    },
+                    "custom": {
+                        "drawStyle": "line",
+                        "lineWidth": 2,
+                        "fillOpacity": 15,
+                        "showPoints": "always",
+                        "pointSize": 7,
+                        "spanNulls": true,
+                        "stacking": {
+                            "mode": "none"
+                        }
+                    },
+                    "thresholds": {
+                        "mode": "absolute",
+                        "steps": [
+                            {
+                                "value": 0,
+                                "color": "transparent"
+                            },
+                            {
+                                "value": 3,
+                                "color": "yellow"
+                            },
+                            {
+                                "value": 5,
+                                "color": "orange"
+                            },
+                            {
+                                "value": 10,
+                                "color": "red"
+                            }
+                        ]
+                    }
+                }
+            },
+            "options": {
+                "tooltip": {
+                    "mode": "multi",
+                    "sort": "desc"
+                },
+                "legend": {
+                    "displayMode": "table",
+                    "placement": "bottom",
+                    "calcs": [
+                        "last",
+                        "max",
+                        "mean",
+                        "sum"
+                    ]
+                }
+            }
+        },
+        {
+            "id": 5,
+            "title": "Recent Kubernetes Events",
+            "type": "logs",
+            "gridPos": {
+                "x": 0,
+                "y": 27,
+                "w": 24,
+                "h": 12
+            },
+            "datasource": {
+                "type": "grafana-postgresql-datasource",
+                "uid": "PostgreSQL"
+            },
+            "targets": [
+                {
+                    "rawSql": "SELECT \n  timestamp,\n  CONCAT(\n    CASE \n      WHEN event_type = 'ADDED' THEN '✅ '\n      WHEN event_type = 'MODIFIED' THEN '� '\n      WHEN event_type = 'DELETED' THEN '🗑️ '\n      WHEN event_type = 'CrashLoop' THEN '💥 '\n      ELSE '�🔵 '\n    END,\n    '[', event_type, '] ',\n    pod_name, ' → ', message\n  ) as line\nFROM events \nWHERE timestamp > NOW() - INTERVAL '1 hour'\nORDER BY timestamp DESC \nLIMIT 100",
+                    "format": "table",
+                    "refId": "A"
+                }
+            ],
+            "options": {
+                "showTime": true,
+                "showLabels": false,
+                "showCommonLabels": false,
+                "wrapLogMessage": true,
+                "prettifyLogMessage": false,
+                "enableLogDetails": true,
+                "dedupStrategy": "none",
+                "sortOrder": "Descending"
+            }
+        }
+    ],
+    "id": null,
+    "uid": "aura-k8s-v2",
+    "schemaVersion": 38
+}

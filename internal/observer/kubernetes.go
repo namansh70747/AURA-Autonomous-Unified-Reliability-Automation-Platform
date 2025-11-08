@@ -40,30 +40,32 @@ func NewKubernetesWatcher(namespace string, db *storage.PostgresClient, logger *
 
 	clientset, err := watcher.createKubernetesClient()
 	if err != nil {
-		logger.Warn("Could not connect to Kubernetes, watcher disabled", zap.Error(err))
-		return watcher, nil
+		// Changed: do not return a disabled watcher silently. Return an error so the caller
+		// can detect that Kubernetes connectivity failed and choose a fallback (or disable features).
+		logger.Warn("Could not connect to Kubernetes", zap.Error(err))
+		return nil, fmt.Errorf("could not create kubernetes client: %w", err)
 	}
 
 	watcher.clientset = clientset
-	watcher.enabled = true 
+	watcher.enabled = true
 
 	return watcher, nil
 }
 
 func (k *KubernetesWatcher) createKubernetesClient() (*kubernetes.Clientset, error) {
-	config, err := rest.InClusterConfig() 
-	/* 
-	"Hey Kubernetes… am I already running inside your cluster as a pod?"
-	If answer = YES (we are inside K8s):
-	then Kubernetes will automatically give you the credentials (token, certs)
-	and this function gives you a ready config to talk to API server.
-	→ then we return clientset
+	config, err := rest.InClusterConfig()
+	/*
+		"Hey Kubernetes… am I already running inside your cluster as a pod?"
+		If answer = YES (we are inside K8s):
+		then Kubernetes will automatically give you the credentials (token, certs)
+		and this function gives you a ready config to talk to API server.
+		→ then we return clientset
 	*/
 	if err == nil {
-		return kubernetes.NewForConfig(config) // We are Making the clinetset Object that csan perform tasks that the kubernetes need to perfoem or we want the kubernetes to perform 
+		return kubernetes.NewForConfig(config) // We are Making the clinetset Object that csan perform tasks that the kubernetes need to perfoem or we want the kubernetes to perform
 	}
 
-	kubeconfigPath := os.Getenv("KUBECONFIG") //Docker Compose mai set kar rakhi hai maine 
+	kubeconfigPath := os.Getenv("KUBECONFIG") //Docker Compose mai set kar rakhi hai maine
 	if kubeconfigPath == "" {
 		home, err := os.UserHomeDir()
 		if err != nil {
@@ -81,17 +83,23 @@ func (k *KubernetesWatcher) createKubernetesClient() (*kubernetes.Clientset, err
 		return nil, fmt.Errorf("failed to build kubeconfig: %w", err)
 	}
 
-	return kubernetes.NewForConfig(config) //Yeh Wali Apni config hai jo hamne register ki hai khud se 
+	return kubernetes.NewForConfig(config) //Yeh Wali Apni config hai jo hamne register ki hai khud se
 }
 
 func (k *KubernetesWatcher) Start(ctx context.Context) error {
 	if !k.enabled {
-		<-ctx.Done()
-		return nil
+		k.logger.Warn("Kubernetes watcher is not enabled - skipping pod monitoring")
+		return fmt.Errorf("kubernetes watcher not enabled")
 	}
+
+	k.logger.Info("Starting Kubernetes watcher",
+		zap.String("namespace", k.namespace),
+		zap.Bool("enabled", k.enabled))
 
 	go k.watchPods(ctx)
 	go k.collectPodMetrics(ctx)
+
+	k.logger.Info("Kubernetes watcher started successfully - monitoring pods")
 
 	<-ctx.Done()
 	return ctx.Err()
@@ -99,14 +107,17 @@ func (k *KubernetesWatcher) Start(ctx context.Context) error {
 }
 
 func (k *KubernetesWatcher) watchPods(ctx context.Context) {
+	k.logger.Info("Starting pod event watcher", zap.String("namespace", k.namespace))
+
 	for {
 		select {
 		case <-ctx.Done():
+			k.logger.Info("Pod watcher stopped")
 			return
 		default:
 			if err := k.watchPodsOnce(ctx); err != nil {
-				k.logger.Error("Pod watch error", zap.Error(err))
-				time.Sleep(10 * time.Second)
+				k.logger.Error("Pod watch error, retrying in 5s", zap.Error(err))
+				time.Sleep(5 * time.Second)
 			}
 		}
 	}
@@ -118,21 +129,23 @@ func (k *KubernetesWatcher) watchPodsOnce(ctx context.Context) error {
 		TimeoutSeconds: &timeout,
 	})
 	if err != nil {
-		return fmt.Errorf("failed to watch pods: %w", err)
-	} // 
+		return fmt.Errorf("failed to start watch: %w", err)
+	}
 	defer watcher.Stop()
+
+	k.logger.Info("Pod watcher connected, monitoring for events...")
 
 	for {
 		select {
 		case <-ctx.Done():
 			return ctx.Err()
-		case event, ok := <-watcher.ResultChan(): // This is Giving Kubernetes Event 
+		case event, ok := <-watcher.ResultChan():
 			if !ok {
+				k.logger.Warn("Watch channel closed, will reconnect")
 				return fmt.Errorf("watch channel closed")
 			}
-
 			if err := k.handlePodEvent(ctx, event); err != nil {
-				k.logger.Error("Pod event error", zap.Error(err))
+				k.logger.Error("Failed to handle pod event", zap.Error(err))
 			}
 		}
 	}
@@ -141,16 +154,16 @@ func (k *KubernetesWatcher) watchPodsOnce(ctx context.Context) error {
 func (k *KubernetesWatcher) handlePodEvent(ctx context.Context, event watch.Event) error {
 	pod, ok := event.Object.(*corev1.Pod)
 	/*
-	Because Kubernetes watch can send different types of objects.
-	So before using, we must check:	
-	Example things that cause events:
-	a pod got created.
-	a pod got deleted.
-	a pod crashed.
-	image pull failed.
-	container restarted.
-	scheduler moved a pod. 
-	*/ 
+		Because Kubernetes watch can send different types of objects.
+		So before using, we must check:
+		Example things that cause events:
+		a pod got created.
+		a pod got deleted.
+		a pod crashed.
+		image pull failed.
+		container restarted.
+		scheduler moved a pod.
+	*/
 	if !ok {
 		return fmt.Errorf("unexpected object type: %T", event.Object)
 	}
@@ -158,15 +171,22 @@ func (k *KubernetesWatcher) handlePodEvent(ctx context.Context, event watch.Even
 	eventType := string(event.Type)
 	message := k.buildEventMessage(pod, eventType)
 
+	k.logger.Info("Kubernetes pod event detected",
+		zap.String("event_type", eventType),
+		zap.String("pod_name", pod.Name),
+		zap.String("namespace", pod.Namespace),
+		zap.String("phase", string(pod.Status.Phase)))
+
 	storageEvent := &storage.Event{
 		Timestamp: time.Now(),
 		EventType: eventType,
 		PodName:   pod.Name,
 		Namespace: pod.Namespace,
 		Message:   message,
-	} //Yeh Sabh de diya maine 
+	}
 
 	if err := k.db.SaveEvent(ctx, storageEvent); err != nil {
+		k.logger.Error("Failed to save event to database", zap.Error(err))
 		return fmt.Errorf("failed to save event: %w", err)
 	}
 
@@ -194,13 +214,17 @@ func (k *KubernetesWatcher) collectPodMetrics(ctx context.Context) {
 	ticker := time.NewTicker(30 * time.Second)
 	defer ticker.Stop()
 
+	// Collect initial metrics immediately on startup
 	if err := k.collectAndStorePodMetrics(ctx); err != nil {
 		k.logger.Error("Initial pod metrics collection failed", zap.Error(err))
+	} else {
+		k.logger.Info("Initial pod metrics collected successfully")
 	}
 
 	for {
 		select {
 		case <-ctx.Done():
+			k.logger.Info("Pod metrics collection stopped")
 			return
 		case <-ticker.C:
 			if err := k.collectAndStorePodMetrics(ctx); err != nil {
@@ -210,15 +234,32 @@ func (k *KubernetesWatcher) collectPodMetrics(ctx context.Context) {
 	}
 }
 
+// Fix collectAndStorePodMetrics to handle all namespaces if needed
 func (k *KubernetesWatcher) collectAndStorePodMetrics(ctx context.Context) error {
+	// List all pods in the namespace
 	pods, err := k.clientset.CoreV1().Pods(k.namespace).List(ctx, metav1.ListOptions{})
 	if err != nil {
 		return fmt.Errorf("failed to list pods: %w", err)
 	}
 
+	if len(pods.Items) == 0 {
+		k.logger.Warn("No pods found in namespace",
+			zap.String("namespace", k.namespace),
+			zap.String("hint", "Deploy apps to Kubernetes or check namespace"))
+		return nil
+	}
+
 	var metrics []*storage.Metric
+	podCount := 0
 
 	for _, pod := range pods.Items {
+		// Skip system pods (kube-system) unless explicitly monitoring them
+		if pod.Namespace == "kube-system" && k.namespace != "kube-system" {
+			continue
+		}
+
+		podCount++
+
 		// Pod status metric
 		statusMetric := &storage.Metric{
 			Timestamp:   time.Now(),
@@ -244,6 +285,13 @@ func (k *KubernetesWatcher) collectAndStorePodMetrics(ctx context.Context) error
 		if err := k.db.BatchSaveMetrics(ctx, metrics); err != nil {
 			return fmt.Errorf("failed to save pod metrics: %w", err)
 		}
+		k.logger.Info("Pod metrics saved to database",
+			zap.Int("pod_count", podCount),
+			zap.Int("metrics_saved", len(metrics)),
+			zap.String("namespace", k.namespace))
+	} else {
+		k.logger.Warn("No metrics collected - no application pods found",
+			zap.String("namespace", k.namespace))
 	}
 
 	return nil
@@ -261,7 +309,7 @@ func (k *KubernetesWatcher) buildEventMessage(pod *corev1.Pod, eventType string)
 	default:
 		return fmt.Sprintf("Pod %s event: %s", pod.Name, eventType)
 	}
-} // Build Event Messages 
+} // Build Event Messages
 
 func (k *KubernetesWatcher) getPodRestarts(pod *corev1.Pod) int32 {
 	var restarts int32
@@ -303,6 +351,7 @@ func (k *KubernetesWatcher) isPodReady(pod *corev1.Pod) bool {
 
 func (k *KubernetesWatcher) buildPodLabels(pod *corev1.Pod) json.RawMessage {
 	labels := map[string]interface{}{
+		"pod_name":  pod.Name,
 		"namespace": pod.Namespace,
 		"phase":     string(pod.Status.Phase),
 		"ready":     k.isPodReady(pod),

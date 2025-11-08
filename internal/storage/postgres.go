@@ -88,7 +88,7 @@ func (c *PostgresClient) GetRecentMetrics(
 	ctx context.Context,
 	serviceName string,
 	metricName string,
-	duration time.Duration, 
+	duration time.Duration,
 ) ([]*Metric, error) {
 	query := `
 		SELECT id, timestamp, service_name, metric_name, metric_value, labels, created_at
@@ -100,17 +100,17 @@ func (c *PostgresClient) GetRecentMetrics(
 		LIMIT 1000
 	`
 	// what is this timestamp for ? answer is that it is used to get the recent metrics in a duration
-	// we ar ordering 
+	// we ar ordering
 	ctx, cancel := context.WithTimeout(ctx, 10*time.Second)
 	defer cancel()
 	//since := time.Now().Add(-duration) this is getting the time from duration means how, answer is it is getting the time from now and subtracting the duration from it
-	since := time.Now().Add(-duration) //we have added duration here because we are getting recent metrics in a duration
+	since := time.Now().Add(-duration)                                    //we have added duration here because we are getting recent metrics in a duration
 	rows, err := c.pool.Query(ctx, query, serviceName, metricName, since) // so this are getting the rows from the database on the basis of service name , metric name and since time
 	if err != nil {
 		return nil, fmt.Errorf("failed to query metrics: %w", err)
 	}
 	defer rows.Close()
-// means latest se purane ki taraf jaa rhe hain hum 
+	// means latest se purane ki taraf jaa rhe hain hum
 	var metrics []*Metric
 	for rows.Next() {
 		var m Metric
@@ -185,23 +185,35 @@ func (c *PostgresClient) SaveEvent(ctx context.Context, event *Event) error {
 	).Scan(&event.ID, &event.CreatedAt)
 
 	if err != nil {
+		c.logger.Error("Failed to save Kubernetes event",
+			zap.Error(err),
+			zap.String("event_type", event.EventType),
+			zap.String("pod_name", event.PodName))
 		return fmt.Errorf("failed to save event: %w", err)
 	}
+
+	c.logger.Debug("Saved Kubernetes event",
+		zap.Int64("event_id", event.ID),
+		zap.String("event_type", event.EventType),
+		zap.String("pod_name", event.PodName),
+		zap.String("namespace", event.Namespace))
 
 	return nil
 }
 
 func (c *PostgresClient) BatchSaveMetrics(ctx context.Context, metrics []*Metric) error {
 	if len(metrics) == 0 {
+		c.logger.Debug("No metrics to save")
 		return nil
-	}// length of metrics and it is given above the metrics and and their features
+	}
 
-	ctx, cancel := context.WithTimeout(ctx, 30*time.Second)// this is context
+	ctx, cancel := context.WithTimeout(ctx, 30*time.Second)
 	defer cancel()
-	// rows := make([][]any, 0, len(metrics)) this is 2d array and in the brackets we are giving the length of metrics and 0 is the initial capacity and len of metrics is the maximum capacity
-	rows := make([][]any, 0, len(metrics))// this is 2d array of any type and it's features are given below like timestamp , service name , metric name , metric value , labels
+
+	// Build rows for batch insert
+	rows := make([][]any, 0, len(metrics))
 	for _, metric := range metrics {
-		rows = append(rows, []any{ // How we are appending the rows here is []any{ } means that it is of any type and then we are giving the features of metric like timestamp , service name , metric name , metric value , labels
+		rows = append(rows, []any{
 			metric.Timestamp,
 			metric.ServiceName,
 			metric.MetricName,
@@ -210,19 +222,26 @@ func (c *PostgresClient) BatchSaveMetrics(ctx context.Context, metrics []*Metric
 		})
 	}
 
+	// Use PostgreSQL COPY command for efficient batch insert
 	copyCount, err := c.pool.CopyFrom(
 		ctx,
 		pgx.Identifier{"metrics"},
 		[]string{"timestamp", "service_name", "metric_name", "metric_value", "labels"},
 		pgx.CopyFromRows(rows),
-	)// all at once chala jayega 
+	)
 	if err != nil {
+		c.logger.Error("Failed to batch save metrics",
+			zap.Error(err),
+			zap.Int("attempted_count", len(metrics)))
 		return fmt.Errorf("failed to copy metrics: %w", err)
 	}
-	_ = copyCount //we have written this to avoid unused variable error
+
+	c.logger.Info("Batch saved metrics to database",
+		zap.Int64("saved_count", copyCount),
+		zap.Int("metrics_count", len(metrics)))
 
 	return nil
-}// batch metrics is doing that it is moving on the collected metrics and then it is appending the each metric features like timestamp , service name , metric name , metric value , labels and then it is copying all at once into rows and then the rows are appended into the database at once
+}
 
 func (c *PostgresClient) GetPoolStats() *pgxpool.Stat {
 	return c.pool.Stat()
@@ -552,3 +571,27 @@ func (c *PostgresClient) GetPodEvents(ctx context.Context, podName string, durat
 
 	return events, rows.Err()
 }
+
+/*
+| SELECT variation       | meaning            |
+| ---------------------- | ------------------ |
+| SELECT columns         | show exact data    |
+| SELECT COUNT(*)        | show how many rows |
+| SELECT SUM(x)          | add all values     |
+| SELECT AVG(x)          | average            |
+| SELECT MIN(x)          | smallest           |
+| SELECT MAX(x)          | largest            |
+| SELECT DISTINCT column | remove duplicates  |
+*/
+
+// SELECT * FROM users;
+// SELECT id, name FROM users;
+// SELECT COUNT(*) FROM users;
+// SELECT SUM(price) FROM orders;
+// SELECT AVG(age) FROM persons;
+// SELECT MAX(salary) FROM employees;
+// SELECT MIN(salary) FROM employees;
+// SELECT DISTINCT country FROM customers;
+// SELECT * FROM users WHERE age > 18;
+// SELECT * FROM orders ORDER BY date DESC;
+// SELECT * FROM logs ORDER BY time DESC LIMIT 10;

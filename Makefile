@@ -143,7 +143,7 @@ minikube-start: minikube-check
 	    echo "$(GREEN)$(CHECK) Minikube is already running$(NC)"; \
 	else \
 	    echo "$(YELLOW)⏳ Starting Minikube (this may take 1-2 minutes)...$(NC)"; \
-	    minikube start --driver=docker --cpus=2 --memory=4096; \
+	    minikube start --kubernetes-version=v1.30.0 --driver=docker; \
 	    echo "$(GREEN)$(CHECK) Minikube started successfully$(NC)"; \
 	fi
 	@echo ""
@@ -184,29 +184,29 @@ k8s-setup: minikube-start
 	@echo ""
 	@mkdir -p $(HOME)/.kube_docker
 	@if [ -f $(HOME)/.kube/config ]; then \
-	    echo "$(CYAN)$(ARROW) Copying kubeconfig...$(NC)"; \
-	    cp $(HOME)/.kube/config $(KUBECONFIG_DOCKER);s \
-	    echo "$(CYAN)$(ARROW) Modifying for Docker compatibility...$(NC)"; \
-	    if [[ "$$OSTYPE" == "darwin"* ]]; then \
-	        sed -i '' 's/127\.0\.0\.1/host.docker.internal/g' $(KUBECONFIG_DOCKER); \
-	        sed -i '' 's/localhost/host.docker.internal/g' $(KUBECONFIG_DOCKER); \
-	        sed -i '' 's/certificate-authority:.*/insecure-skip-tls-verify: true/g' $(KUBECONFIG_DOCKER); \
-	    else \
-	        sed -i 's/127\.0\.0\.1/host.docker.internal/g' $(KUBECONFIG_DOCKER); \
-	        sed -i 's/localhost/host.docker.internal/g' $(KUBECONFIG_DOCKER); \
-	        sed -i 's/certificate-authority:.*/insecure-skip-tls-verify: true/g' $(KUBECONFIG_DOCKER); \
-	    fi; \
-	    echo "$(GREEN)$(CHECK) Kubeconfig configured: $(KUBECONFIG_DOCKER)$(NC)"; \
+		echo "$(CYAN)$(ARROW) Copying kubeconfig...$(NC)"; \
+		cp $(HOME)/.kube/config $(KUBECONFIG_DOCKER); \
+		echo "$(CYAN)$(ARROW) Modifying for Docker compatibility...$(NC)"; \
+		if [ "$$(uname)" = "Darwin" ]; then \
+			sed -i '' 's/127\.0\.0\.1/host.docker.internal/g' $(KUBECONFIG_DOCKER); \
+			sed -i '' 's/localhost/host.docker.internal/g' $(KUBECONFIG_DOCKER); \
+			sed -i '' 's/certificate-authority:.*/insecure-skip-tls-verify: true/g' $(KUBECONFIG_DOCKER); \
+		else \
+			sed -i 's/127\.0\.0\.1/host.docker.internal/g' $(KUBECONFIG_DOCKER); \
+			sed -i 's/localhost/host.docker.internal/g' $(KUBECONFIG_DOCKER); \
+			sed -i 's/certificate-authority:.*/insecure-skip-tls-verify: true/g' $(KUBECONFIG_DOCKER); \
+		fi; \
+		echo "$(GREEN)$(CHECK) Kubeconfig configured: $(KUBECONFIG_DOCKER)$(NC)"; \
 	else \
-	    echo "$(RED)$(CROSS) Kubeconfig not found at $(HOME)/.kube/config$(NC)"; \
-	    exit 1; \
+		echo "$(RED)$(CROSS) Kubeconfig not found at $(HOME)/.kube/config$(NC)"; \
+		exit 1; \
 	fi
 	@echo ""
 	@echo "$(CYAN)$(ARROW) Testing Kubernetes connectivity...$(NC)"
 	@if kubectl --kubeconfig=$(KUBECONFIG_DOCKER) get nodes >/dev/null 2>&1; then \
-	    echo "$(GREEN)$(CHECK) Kubernetes is accessible$(NC)"; \
+		echo "$(GREEN)$(CHECK) Kubernetes is accessible$(NC)"; \
 	else \
-	    echo "$(YELLOW)⚠️  Kubernetes not accessible from host (will retry from Docker)$(NC)"; \
+		echo "$(YELLOW)⚠️  Kubernetes not accessible from host (will retry from Docker)$(NC)"; \
 	fi
 
 k8s-verify:
@@ -248,6 +248,28 @@ k8s-clean:
 	@kubectl delete -f deployments/k8s/ --ignore-not-found=true
 	@echo "$(GREEN)$(CHECK) Kubernetes resources removed$(NC)"
 
+k8s-build-sample-app:
+	@echo "$(CYAN)$(GEAR) Building sample-app for Kubernetes...$(NC)"
+	@eval $$(minikube docker-env) && \
+	docker build -t sample-app:latest -f examples/sample-app/Dockerfile .
+	@echo "$(GREEN)$(CHECK) Sample app image built in Minikube$(NC)"
+
+k8s-deploy-sample-app: k8s-build-sample-app
+	@echo "$(CYAN)$(K8S) Deploying sample-app to Kubernetes...$(NC)"
+	@kubectl apply -f deployments/kubernetes/sample-app-deployment.yaml
+	@echo "$(GREEN)$(CHECK) Sample app deployed$(NC)"
+	@echo ""
+	@echo "$(YELLOW)Waiting for pods to be ready...$(NC)"
+	@kubectl wait --for=condition=ready pod -l app=sample-app --timeout=60s
+	@echo "$(GREEN)$(CHECK) Pods are ready!$(NC)"
+	@echo ""
+	@kubectl get pods -l app=sample-app
+
+k8s-delete-sample-app:
+	@echo "$(YELLOW)Deleting sample-app from Kubernetes...$(NC)"
+	@kubectl delete -f deployments/kubernetes/sample-app-deployment.yaml --ignore-not-found=true
+	@echo "$(GREEN)$(CHECK) Sample app deleted$(NC)"
+
 # ─────────────────────────────────────────────────────────────────────────────
 # Docker Commands
 # ─────────────────────────────────────────────────────────────────────────────
@@ -287,26 +309,11 @@ logs-aura:
 # Complete Setup Commands
 # ─────────────────────────────────────────────────────────────────────────────
 
-start-all: clean minikube-start k8s-setup build-linux docker-up
+start-all: clean minikube-start k8s-setup build-linux k8s-deploy-sample-app docker-up
 	@echo ""
-	@echo "$(BLUE)━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━$(NC)"
-	@echo "$(BOLD)$(GREEN)🎉 AURA Platform Started Successfully!$(NC)"
-	@echo "$(BLUE)━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━$(NC)"
-	@echo ""
-	@echo "$(BOLD)$(YELLOW)Access Points:$(NC)"
-	@echo "  $(ROCKET) AURA API:       $(CYAN)http://localhost:8081$(NC)"
-	@echo "  📊 Prometheus:     $(CYAN)http://localhost:9090$(NC)"
-	@echo "  💾 PostgreSQL:     $(CYAN)localhost:5432$(NC)"
-	@echo "  🌐 Sample App:     $(CYAN)http://localhost:8080$(NC)"
-	@echo "  $(K8S) Minikube IP:    $(CYAN)$$(minikube ip)$(NC)"
-	@echo ""
-	@echo "$(BOLD)$(YELLOW)Quick Commands:$(NC)"
-	@echo "  $(CYAN)make health$(NC)        - System health check"
-	@echo "  $(CYAN)make test-phase2$(NC)   - Test Phase 2 endpoints"
-	@echo "  $(CYAN)make analyze$(NC)       - Run pattern analysis"
-	@echo "  $(CYAN)make k8s-status$(NC)    - Check Kubernetes pods"
-	@echo "  $(CYAN)make stop-all$(NC)      - Stop everything"
-	@echo ""
+	@echo "$(GREEN)$(ROCKET) AURA is now running!$(NC)"
+	@echo "$(CYAN)Sample app pods in Kubernetes:$(NC)"
+	@kubectl get pods -l app=sample-app
 
 start: k8s-setup build-linux docker-up
 	@echo "$(GREEN)$(CHECK) AURA platform is running!$(NC)"
@@ -438,14 +445,7 @@ metrics:
 db-status:
 	@echo "$(BLUE)💾 Database Status$(NC)"
 	@echo "$(BLUE)━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━$(NC)"
-	@docker exec aura-postgres psql -U aura -d aura_db <<< "\
-	    SELECT 'Metrics' as table_name, COUNT(*) as count FROM metrics \
-	    UNION ALL \
-	    SELECT 'Diagnoses', COUNT(*) FROM diagnoses \
-	    UNION ALL \
-	    SELECT 'Decisions', COUNT(*) FROM decisions \
-	    UNION ALL \
-	    SELECT 'Events', COUNT(*) FROM events;"
+	@docker exec aura-postgres psql -U aura -d aura_db -c "SELECT 'Metrics' as table_name, COUNT(*) as count FROM metrics UNION ALL SELECT 'Diagnoses', COUNT(*) FROM diagnoses UNION ALL SELECT 'Decisions', COUNT(*) FROM decisions UNION ALL SELECT 'Events', COUNT(*) FROM events;"
 
 db-shell:
 	@echo "$(BLUE)💾 Opening PostgreSQL shell...$(NC)"
@@ -526,8 +526,3 @@ quick-start: start-all test-all
 	@echo ""
 	@echo "$(BOLD)$(GREEN)🎊 AURA is ready and tested!$(NC)"
 
-# ─────────────────────────────────────────────────────────────────────────────
-# Help Aliases
-# ─────────────────────────────────────────────────────────────────────────────
-
-.DEFAULT_GOAL := help
