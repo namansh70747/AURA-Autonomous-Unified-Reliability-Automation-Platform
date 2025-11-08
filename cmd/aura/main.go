@@ -137,6 +137,8 @@ func main() {
 		// Phase 2: Pattern Analysis Endpoints
 		v1.GET("/analyze/:service", analyzeServiceHandler(patternAnalyzer))
 		v1.GET("/analyze/all", analyzeAllServicesHandler(patternAnalyzer, db))
+		v1.GET("/diagnoses/:service", getDiagnosisHistoryHandler(db))
+		v1.GET("/diagnoses", getAllDiagnosesHandler(db))
 	}
 
 	srv := &http.Server{
@@ -912,6 +914,85 @@ func analyzeAllServicesHandler(analyzer *analyzer.Analyzer, db *storage.Postgres
 			"services":       services,
 			"diagnoses":      results,
 			"analyzed_at":    time.Now().Format(time.RFC3339),
+		})
+	}
+}
+
+// getDiagnosisHistoryHandler retrieves diagnosis history for a specific service
+func getDiagnosisHistoryHandler(db *storage.PostgresClient) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		serviceName := c.Param("service")
+		limit := 10
+
+		if val, ok := c.GetQuery("limit"); ok {
+			if l, parseErr := fmt.Sscanf(val, "%d", &limit); parseErr == nil && l == 1 {
+				// limit parsed successfully
+			}
+		}
+
+		ctx, cancel := context.WithTimeout(c.Request.Context(), 5*time.Second)
+		defer cancel()
+
+		diagnoses, err := db.GetRecentDiagnosis(ctx, serviceName, limit)
+		if err != nil {
+			logger.Error("Failed to fetch diagnoses",
+				zap.String("service", serviceName),
+				zap.Error(err),
+			)
+			c.JSON(http.StatusInternalServerError, gin.H{
+				"error": "failed to fetch diagnoses",
+			})
+			return
+		}
+
+		c.JSON(http.StatusOK, gin.H{
+			"service":   serviceName,
+			"count":     len(diagnoses),
+			"diagnoses": diagnoses,
+			"timestamp": time.Now().Format(time.RFC3339),
+		})
+	}
+}
+
+// getAllDiagnosesHandler retrieves all recent diagnoses across all services
+func getAllDiagnosesHandler(db *storage.PostgresClient) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		limit := 50
+		if val, ok := c.GetQuery("limit"); ok {
+			if l, parseErr := fmt.Sscanf(val, "%d", &limit); parseErr == nil && l == 1 {
+				// limit parsed successfully
+			}
+		}
+
+		ctx, cancel := context.WithTimeout(c.Request.Context(), 5*time.Second)
+		defer cancel()
+
+		// Get all diagnoses from database - need to implement this
+		// For now, get recent diagnoses for known services
+		services, err := db.GetAllServices(ctx)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{
+				"error": "failed to fetch services",
+			})
+			return
+		}
+
+		allDiagnoses := make(map[string][]*storage.DiagnosisRecord)
+		totalCount := 0
+
+		for _, service := range services {
+			diagnoses, err := db.GetRecentDiagnosis(ctx, service, limit/len(services))
+			if err != nil {
+				continue
+			}
+			allDiagnoses[service] = diagnoses
+			totalCount += len(diagnoses)
+		}
+
+		c.JSON(http.StatusOK, gin.H{
+			"total_count": totalCount,
+			"services":    allDiagnoses,
+			"timestamp":   time.Now().Format(time.RFC3339),
 		})
 	}
 }

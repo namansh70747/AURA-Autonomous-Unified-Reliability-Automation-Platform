@@ -36,11 +36,27 @@ CREATE TABLE IF NOT EXISTS decisions (
     created_at TIMESTAMPTZ DEFAULT NOW()
 );
 
+-- Diagnoses table (stores pattern analysis results)
+CREATE TABLE IF NOT EXISTS diagnoses (
+    id SERIAL PRIMARY KEY,
+    service_name VARCHAR(100) NOT NULL,
+    problem_type VARCHAR(100) NOT NULL,
+    confidence DECIMAL(5,2) NOT NULL,
+    severity VARCHAR(20) NOT NULL,
+    evidence JSONB,
+    recommendation TEXT,
+    timestamp TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
 -- Create indexes for performance
-CREATE INDEX idx_metrics_timestamp ON metrics(timestamp DESC);
-CREATE INDEX idx_metrics_service ON metrics(service_name);
-CREATE INDEX idx_events_timestamp ON events(timestamp DESC);
-CREATE INDEX idx_decisions_timestamp ON decisions(timestamp DESC);
+CREATE INDEX IF NOT EXISTS idx_metrics_timestamp ON metrics(timestamp DESC);
+CREATE INDEX IF NOT EXISTS idx_metrics_service ON metrics(service_name);
+CREATE INDEX IF NOT EXISTS idx_events_timestamp ON events(timestamp DESC);
+CREATE INDEX IF NOT EXISTS idx_decisions_timestamp ON decisions(timestamp DESC);
+CREATE INDEX IF NOT EXISTS idx_diagnoses_service ON diagnoses(service_name);
+CREATE INDEX IF NOT EXISTS idx_diagnoses_timestamp ON diagnoses(timestamp DESC);
+CREATE INDEX IF NOT EXISTS idx_diagnoses_severity ON diagnoses(severity);
 
 -- Insert test data
 INSERT INTO metrics (service_name, metric_name, metric_value, labels) VALUES

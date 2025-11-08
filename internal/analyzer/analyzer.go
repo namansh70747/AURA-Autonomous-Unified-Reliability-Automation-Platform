@@ -11,6 +11,7 @@ import (
 )
 
 type Analyzer struct {
+	db                         *storage.PostgresClient
 	memoryLeakDetector         *MemoryLeakDetector
 	deploymentBugDetector      *DeploymentBugDetector
 	cascadeDetector            *CascadeDetector
@@ -22,6 +23,7 @@ func NewAnalyzer(db *storage.PostgresClient) *Analyzer {
 	logger.Info("Initializing pattern analyzer")
 
 	return &Analyzer{
+		db:                         db,
 		memoryLeakDetector:         NewMemoryLeakDetector(db),
 		deploymentBugDetector:      NewDeploymentBugDetector(db),
 		cascadeDetector:            NewCascadeDetector(db),
@@ -83,8 +85,7 @@ func (a *Analyzer) AnalyzeService(ctx context.Context, serviceName string) (*Dia
 		results <- detection
 	}()
 
-
-	detections := []*Detection{} //detection pointer type ka array
+	detections := []*Detection{}
 	for i := 0; i < 5; i++ {
 		select {
 		case detection := <-results:
@@ -104,40 +105,107 @@ func (a *Analyzer) AnalyzeService(ctx context.Context, serviceName string) (*Dia
 			return nil, ctx.Err()
 		}
 	}
-	 // Sort in descending order of Confidence
+
 	sort.Slice(detections, func(i, j int) bool {
 		return detections[i].Confidence > detections[j].Confidence
 	})
 
-	bestMatch := detections[0] //Best Confidence 
+	bestMatch := detections[0]
 
 	diagnosis := &Diagnosis{
-		ServiceName:    serviceName,
-		Problem:        DetectionHealthy,
-		Confidence:     0,
-		Timestamp:      time.Now(),
-		Evidence:       map[string]interface{}{},
-		Recommendation: "Service is healthy. No issues detected.",
-		Severity:       "LOW",
-		AllDetections:  make([]Detection, 0),
+		ServiceName:         serviceName,
+		Problem:             DetectionHealthy,
+		Confidence:          0,
+		Timestamp:           time.Now(),
+		Evidence:            map[string]interface{}{},
+		Recommendation:      "Service is healthy. No issues detected.",
+		Severity:            "LOW",
+		AllDetections:       make([]Detection, 0),
+		MultipleProblems:    false,
+		HighConfidenceCount: 0,
 	}
 
 	for _, d := range detections {
 		diagnosis.AllDetections = append(diagnosis.AllDetections, *d)
 	}
 
-	if bestMatch.Detected && bestMatch.Confidence > 80.0 {
+	// Find ALL problems with confidence > 80% (not just the best match)
+	highConfidenceDetections := []*Detection{}
+	for _, d := range detections {
+		if d.Detected && d.Confidence > 80.0 {
+			highConfidenceDetections = append(highConfidenceDetections, d)
+		}
+	}
+
+	if len(highConfidenceDetections) > 0 {
+		// Use best match for main diagnosis
 		diagnosis.Problem = bestMatch.Type
 		diagnosis.Confidence = bestMatch.Confidence
 		diagnosis.Evidence = bestMatch.Evidence
 		diagnosis.Recommendation = bestMatch.Recommendation
 		diagnosis.Severity = bestMatch.Severity
+		diagnosis.HighConfidenceCount = len(highConfidenceDetections)
+		diagnosis.MultipleProblems = len(highConfidenceDetections) > 1
 
+		// If multiple problems, add note to recommendation
+		if diagnosis.MultipleProblems {
+			problemList := ""
+			for i, d := range highConfidenceDetections {
+				if i > 0 {
+					problemList += ", "
+				}
+				problemList += string(d.Type)
+			}
+			diagnosis.Recommendation = diagnosis.Recommendation +
+				" | ALERT: Multiple issues detected (" + problemList + "). Check all_detections for details."
+		}
+
+		// Log all high-confidence problems
+		if len(highConfidenceDetections) > 1 {
+			logger.Warn("Multiple problems detected",
+				zap.String("service", serviceName),
+				zap.Int("problem_count", len(highConfidenceDetections)),
+			)
+		}
+
+		// Save ALL high-confidence detections to database
+		if a.db != nil {
+			savedCount := 0
+			for _, detection := range highConfidenceDetections {
+				diagnosisRecord := &storage.DiagnosisRecord{
+					ServiceName:    serviceName,
+					ProblemType:    string(detection.Type),
+					Confidence:     detection.Confidence,
+					Severity:       detection.Severity,
+					Evidence:       detection.Evidence,
+					Recommendation: detection.Recommendation,
+					Timestamp:      time.Now(),
+				}
+
+				if err := a.db.SaveDiagnosis(ctx, diagnosisRecord); err != nil {
+					logger.Error("Failed to save diagnosis",
+						zap.String("problem", string(detection.Type)),
+						zap.Error(err),
+					)
+				} else {
+					savedCount++
+				}
+			}
+
+			logger.Info("Diagnoses saved",
+				zap.String("service", serviceName),
+				zap.Int("saved_count", savedCount),
+				zap.Int("total_detected", len(highConfidenceDetections)),
+			)
+		}
+
+		// Log primary problem
 		logger.Info("Problem detected",
 			zap.String("service", serviceName),
-			zap.String("problem", string(bestMatch.Type)),
+			zap.String("primary_problem", string(bestMatch.Type)),
 			zap.Float64("confidence", bestMatch.Confidence),
 			zap.String("severity", bestMatch.Severity),
+			zap.Int("total_problems", len(highConfidenceDetections)),
 		)
 	} else {
 		logger.Info("Service healthy",
@@ -148,7 +216,6 @@ func (a *Analyzer) AnalyzeService(ctx context.Context, serviceName string) (*Dia
 
 	return diagnosis, nil
 }
-
 
 func (a *Analyzer) AnalyzeAllServices(ctx context.Context, services []string) (map[string]*Diagnosis, error) {
 	logger.Info("Analyzing all services",

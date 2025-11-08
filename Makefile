@@ -367,6 +367,35 @@ test-phase2:
 	@echo ""
 	@echo "$(GREEN)$(CHECK) Phase 2 testing complete$(NC)"
 
+test-phase2-complete:
+	@echo "$(BLUE)🧪 Complete Phase 2 Implementation Test$(NC)"
+	@echo "$(BLUE)━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━$(NC)"
+	@echo ""
+	@echo "$(YELLOW)1. Analyzing sample-app$(NC)"
+	@curl -s http://localhost:8081/api/v1/analyze/sample-app | jq '.'
+	@echo ""
+	@echo "$(YELLOW)2. Analyzing all services$(NC)"
+	@curl -s http://localhost:8081/api/v1/analyze/all | jq '.total_services, .services'
+	@echo ""
+	@echo "$(YELLOW)3. Checking diagnosis history for sample-app$(NC)"
+	@curl -s http://localhost:8081/api/v1/diagnoses/sample-app | jq '.diagnoses[0:3]'
+	@echo ""
+	@echo "$(YELLOW)4. Getting all diagnoses$(NC)"
+	@curl -s http://localhost:8081/api/v1/diagnoses | jq '.total_count, .services | keys'
+	@echo ""
+	@echo "$(YELLOW)5. Database verification$(NC)"
+	@echo "$(CYAN)Total diagnoses in database:$(NC)"
+	@docker exec aura-postgres psql -U aura -d aura_db -c "SELECT COUNT(*) as total_diagnoses FROM diagnoses;"
+	@echo ""
+	@echo "$(CYAN)Recent diagnoses by severity:$(NC)"
+	@docker exec aura-postgres psql -U aura -d aura_db -c "SELECT severity, COUNT(*) as count FROM diagnoses GROUP BY severity ORDER BY count DESC;"
+	@echo ""
+	@echo "$(CYAN)Last 5 diagnoses:$(NC)"
+	@docker exec aura-postgres psql -U aura -d aura_db -c "SELECT service_name, problem_type, ROUND(confidence::numeric, 2) as conf, severity, TO_CHAR(timestamp, 'HH24:MI:SS') as time FROM diagnoses ORDER BY timestamp DESC LIMIT 5;"
+	@echo ""
+	@echo "$(GREEN)$(CHECK) Phase 2 complete testing finished$(NC)"
+
+
 test-k8s:
 	@echo "$(BLUE)🧪 Testing Kubernetes Integration$(NC)"
 	@echo "$(BLUE)━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━$(NC)"
