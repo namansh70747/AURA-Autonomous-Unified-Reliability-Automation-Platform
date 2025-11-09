@@ -55,3 +55,9 @@ type DecisionStats struct {
 	Pending       int64   `json:"pending"`
 	AvgConfidence float64 `json:"avg_confidence"`
 }
+
+// MetricRecord is an alias for Metric used in analyzers
+type MetricRecord struct {
+	Timestamp time.Time
+	Value     float64
+}

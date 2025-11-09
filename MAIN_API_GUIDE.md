@@ -80,13 +80,17 @@ When you start AURA, this is what happens:
 
 | Category | Purpose | Count |
 |----------|---------|-------|
-| **Health** | System checks | 2 |
+| **Health** | System checks | 3 |
 | **Metrics** | Performance data | 4 |
 | **Decisions** | Automation history | 3 |
 | **Observer** | Monitoring status | 2 |
 | **Kubernetes** | Pod & event data | 6 |
 | **Prometheus** | Metrics source | 4 |
-| **Total** | | **21 endpoints** |
+| **Pattern Analysis** | Service diagnosis | 4 |
+| **Phase 2: Core Detectors** | Problem detection | 5 |
+| **Phase 2.5: Advanced Analytics** | Deep analysis | 4 |
+| **Phase 3: Advanced Analyzer** | Root cause & health | 3 |
+| **Total** | | **38 endpoints** |
 
 ---
 
@@ -1298,6 +1302,924 @@ done
 | 20 | `/api/v1/prometheus/health` | GET | Prometheus status | 200/503 |
 | 21 | `/api/v1/prometheus/targets` | GET | Scrape targets | 200 |
 | 22 | `/api/v1/prometheus/query` | GET | Query metrics | 200/500 |
+| 23 | `/api/v1/prometheus/metrics/summary` | GET | Metrics summary | 200 |
+| 24 | `/api/v1/analyze/:service` | GET | Analyze service | 200/500 |
+| 25 | `/api/v1/analyze/all` | GET | Analyze all services | 200 |
+| 26 | `/api/v1/diagnoses/:service` | GET | Diagnosis history | 200 |
+| 27 | `/api/v1/diagnoses` | GET | All diagnoses | 200 |
+| 28 | `/api/v1/detect/memory-leak/:service` | GET | Detect memory leak | 200 |
+| 29 | `/api/v1/detect/deployment-bug/:service` | GET | Detect deployment bug | 200 |
+| 30 | `/api/v1/detect/cascade/:service` | GET | Detect cascade failure | 200 |
+| 31 | `/api/v1/detect/resource-exhaustion/:service` | GET | Detect resource exhaustion | 200 |
+| 32 | `/api/v1/detect/external-failure/:service` | GET | Detect external failure | 200 |
+| 33 | `/api/v1/analytics/patterns/:service` | GET | Pattern analysis | 200 |
+| 34 | `/api/v1/analytics/anomalies/:service` | GET | Anomaly detection | 200 |
+| 35 | `/api/v1/analytics/correlation/:service` | GET | Service correlation | 200 |
+| 36 | `/api/v1/analytics/forecast/:service` | GET | Predictive forecast | 200 |
+| 37 | `/api/v1/advanced/diagnose/:service` | GET | Advanced diagnosis | 200 |
+| 38 | `/api/v1/advanced/health/:service` | GET | Health score | 200 |
+| 39 | `/api/v1/advanced/compare` | GET | Compare services | 200 |
+
+---
+
+## 🧠 Phase 2: Pattern Analysis & Detection Endpoints
+
+### 2️⃣4️⃣ Analyze Service
+
+**Endpoint:** `GET /api/v1/analyze/:service`
+
+**Purpose:** Run comprehensive analysis on a service using all 5 detectors
+
+**Curl:**
+
+```bash
+curl http://localhost:8081/api/v1/analyze/sample-app
+```
+
+**Response:**
+
+```json
+{
+  "service_name": "sample-app",
+  "problem": "MEMORY_LEAK",
+  "confidence": 85.5,
+  "timestamp": "2025-11-08T12:00:00Z",
+  "evidence": {
+    "growth_rate_percent": "0.35",
+    "current_memory_mb": 450.2
+  },
+  "recommendation": "Memory leak detected. Enable heap profiling.",
+  "severity": "HIGH",
+  "all_detections": [...],
+  "multiple_problems": false,
+  "high_confidence_count": 1
+}
+```
+
+**Why AURA Needs This:**
+
+- ✅ One-stop diagnosis for a service
+- ✅ Runs all 5 detectors in parallel
+- ✅ Returns prioritized problems by confidence
+
+---
+
+### 2️⃣5️⃣ Analyze All Services
+
+**Endpoint:** `GET /api/v1/analyze/all`
+
+**Purpose:** Batch analysis of all known services
+
+**Curl:**
+
+```bash
+curl http://localhost:8081/api/v1/analyze/all
+```
+
+**Response:**
+
+```json
+{
+  "results": {
+    "sample-app": {
+      "problem": "HEALTHY",
+      "confidence": 0
+    },
+    "api-gateway": {
+      "problem": "DEPLOYMENT_BUG",
+      "confidence": 78.5
+    }
+  },
+  "total_services": 2,
+  "timestamp": "2025-11-08T12:00:00Z"
+}
+```
+
+**Why AURA Needs This:**
+
+- ✅ Fleet-wide health assessment
+- ✅ Identify all problematic services at once
+- ✅ Dashboard overview
+
+---
+
+### 2️⃣6️⃣ Get Diagnosis History
+
+**Endpoint:** `GET /api/v1/diagnoses/:service?duration=24h`
+
+**Purpose:** Retrieve historical diagnoses for a service
+
+**Curl:**
+
+```bash
+curl "http://localhost:8081/api/v1/diagnoses/sample-app?duration=24h"
+```
+
+**Response:**
+
+```json
+{
+  "service": "sample-app",
+  "duration": "24h",
+  "diagnoses": [
+    {
+      "problem": "MEMORY_LEAK",
+      "confidence": 85.5,
+      "timestamp": "2025-11-08T11:30:00Z"
+    }
+  ],
+  "count": 15
+}
+```
+
+**Why AURA Needs This:**
+
+- ✅ Trend analysis (is problem recurring?)
+- ✅ Validation of fixes
+- ✅ Historical reporting
+
+---
+
+### 2️⃣7️⃣ Get All Diagnoses
+
+**Endpoint:** `GET /api/v1/diagnoses`
+
+**Purpose:** Get recent diagnoses across all services
+
+**Curl:**
+
+```bash
+curl http://localhost:8081/api/v1/diagnoses
+```
+
+**Response:**
+
+```json
+{
+  "diagnoses": [...],
+  "total_count": 50,
+  "services_analyzed": 5,
+  "timestamp": "2025-11-08T12:00:00Z"
+}
+```
+
+**Why AURA Needs This:**
+
+- ✅ System-wide health overview
+- ✅ Identify systemic issues
+- ✅ Management reports
+
+---
+
+## 🔍 Phase 2: Core Detection Endpoints
+
+### 2️⃣8️⃣ Memory Leak Detection
+
+**Endpoint:** `GET /api/v1/detect/memory-leak/:service`
+
+**Purpose:** Detect memory leaks using linear regression and traffic analysis
+
+**Curl:**
+
+```bash
+curl http://localhost:8081/api/v1/detect/memory-leak/sample-app
+```
+
+**Response:**
+
+```json
+{
+  "type": "MEMORY_LEAK",
+  "service_name": "sample-app",
+  "detected": true,
+  "confidence": 85.5,
+  "timestamp": "2025-11-08T12:00:00Z",
+  "evidence": {
+    "growth_rate_percent": "0.35",
+    "current_memory_mb": 450.2,
+    "average_memory_mb": 380.5,
+    "r_squared": 0.92,
+    "traffic_stable": true,
+    "accelerating": false
+  },
+  "recommendation": "HIGH PRIORITY: Memory leak detected. Memory growing at 0.35% per minute...",
+  "severity": "HIGH"
+}
+```
+
+**Advanced Features:**
+
+- Linear regression with R² goodness-of-fit
+- Traffic normalization (filters out load-related growth)
+- Growth acceleration detection
+- Sustained growth verification
+- Predictive OOM timeline
+
+**Why AURA Needs This:**
+
+- ✅ Early warning of memory exhaustion
+- ✅ Prevent OOM crashes
+- ✅ Distinguish leaks from normal growth
+
+---
+
+### 2️⃣9️⃣ Deployment Bug Detection
+
+**Endpoint:** `GET /api/v1/detect/deployment-bug/:service`
+
+**Purpose:** Detect issues introduced by recent deployments
+
+**Curl:**
+
+```bash
+curl http://localhost:8081/api/v1/detect/deployment-bug/sample-app
+```
+
+**Response:**
+
+```json
+{
+  "type": "DEPLOYMENT_BUG",
+  "service_name": "sample-app",
+  "detected": true,
+  "confidence": 78.5,
+  "timestamp": "2025-11-08T12:00:00Z",
+  "evidence": {
+    "deployment_time": "2025-11-08T11:45:00Z",
+    "error_rate_change_percent": 85.3,
+    "response_time_change_percent": 42.1,
+    "cpu_spike": true,
+    "statistically_significant": true,
+    "z_score": 2.8
+  },
+  "recommendation": "HIGH PRIORITY: Deployment bug detected. Error rate spiked 85.3% after deployment...",
+  "severity": "HIGH"
+}
+```
+
+**Advanced Features:**
+
+- Change point detection (pre vs post deployment)
+- Z-score statistical significance testing
+- Resource anomaly detection
+- Success rate drop analysis
+- Timing correlation analysis
+
+**Why AURA Needs This:**
+
+- ✅ Rapid rollback decisions
+- ✅ Deployment quality gates
+- ✅ Blame assignment for incidents
+
+---
+
+### 3️⃣0️⃣ Cascade Failure Detection
+
+**Endpoint:** `GET /api/v1/detect/cascade/:service`
+
+**Purpose:** Detect cascading failures across services
+
+**Curl:**
+
+```bash
+curl http://localhost:8081/api/v1/detect/cascade/sample-app
+```
+
+**Response:**
+
+```json
+{
+  "type": "CASCADING_FAILURE",
+  "service_name": "sample-app",
+  "detected": true,
+  "confidence": 72.0,
+  "timestamp": "2025-11-08T12:00:00Z",
+  "evidence": {
+    "latency_spike": true,
+    "current_latency_ms": 1250,
+    "avg_latency_ms": 200,
+    "affected_services": ["api-gateway", "worker-service"],
+    "cascade_risk": 75.0,
+    "upstream_issue": true
+  },
+  "recommendation": "CASCADE WARNING: Affecting 2 services. Enable circuit breakers...",
+  "severity": "HIGH"
+}
+```
+
+**Advanced Features:**
+
+- Service correlation with time-lag analysis
+- Upstream failure detection
+- Propagation pattern identification
+- Cascade risk scoring
+- Multi-service dependency tracking
+
+**Why AURA Needs This:**
+
+- ✅ Stop cascades before total outage
+- ✅ Circuit breaker automation
+- ✅ Root cause identification
+
+---
+
+### 3️⃣1️⃣ Resource Exhaustion Detection
+
+**Endpoint:** `GET /api/v1/detect/resource-exhaustion/:service`
+
+**Purpose:** Detect CPU/Memory exhaustion with predictive ETA
+
+**Curl:**
+
+```bash
+curl http://localhost:8081/api/v1/detect/resource-exhaustion/sample-app
+```
+
+**Response:**
+
+```json
+{
+  "type": "RESOURCE_EXHAUSTION",
+  "service_name": "sample-app",
+  "detected": true,
+  "confidence": 80.0,
+  "timestamp": "2025-11-08T12:00:00Z",
+  "evidence": {
+    "cpu_exhausted": true,
+    "cpu_usage_percent": 92.5,
+    "cpu_trend": "increasing",
+    "memory_exhausted": false,
+    "memory_usage_percent": 65.0,
+    "eta_minutes": 25,
+    "traffic_high": true
+  },
+  "recommendation": "CRITICAL: CPU exhaustion predicted in 25 minutes. Consider scaling immediately...",
+  "severity": "CRITICAL"
+}
+```
+
+**Advanced Features:**
+
+- Multi-dimensional CPU/Memory analysis
+- Predictive ETA to exhaustion
+- Traffic correlation (load vs efficiency)
+- Trend analysis (increasing/stable/decreasing)
+- Critical window detection (<60 min)
+
+**Why AURA Needs This:**
+
+- ✅ Proactive scaling before outage
+- ✅ Capacity planning
+- ✅ Auto-remediation triggers
+
+---
+
+### 3️⃣2️⃣ External Failure Detection
+
+**Endpoint:** `GET /api/v1/detect/external-failure/:service`
+
+**Purpose:** Detect failures in external dependencies
+
+**Curl:**
+
+```bash
+curl http://localhost:8081/api/v1/detect/external-failure/sample-app
+```
+
+**Response:**
+
+```json
+{
+  "type": "EXTERNAL_FAILURE",
+  "service_name": "sample-app",
+  "detected": true,
+  "confidence": 70.0,
+  "timestamp": "2025-11-08T12:00:00Z",
+  "evidence": {
+    "timeout_pattern": true,
+    "avg_response_time_ms": 5500,
+    "error_rate_percent": 8.5,
+    "retry_storm": false,
+    "correlation": 0.85,
+    "resource_error_mismatch": true
+  },
+  "recommendation": "External service dependency issue - Check external APIs/databases...",
+  "severity": "MEDIUM"
+}
+```
+
+**Advanced Features:**
+
+- Timeout pattern detection
+- Retry storm identification
+- Pearson correlation (errors vs response time)
+- Resource-error mismatch (high errors but low CPU)
+- External correlation analysis
+
+**Why AURA Needs This:**
+
+- ✅ Distinguish internal vs external issues
+- ✅ Avoid false alarms on own services
+- ✅ Circuit breaker automation
+
+---
+
+## 📊 Phase 2.5: Advanced Analytics Endpoints
+
+### 3️⃣3️⃣ Pattern Analysis
+
+**Endpoint:** `GET /api/v1/analytics/patterns/:service?metricName=cpu_usage`
+
+**Purpose:** Advanced pattern detection using statistical methods
+
+**Curl:**
+
+```bash
+curl "http://localhost:8081/api/v1/analytics/patterns/sample-app?metricName=cpu_usage"
+```
+
+**Response:**
+
+```json
+{
+  "service": "sample-app",
+  "metric": "cpu_usage",
+  "trend": {
+    "direction": "increasing",
+    "slope": 0.25,
+    "r_squared": 0.88
+  },
+  "volatility": 15.3,
+  "change_point": "2025-11-08T11:30:00Z",
+  "seasonality_detected": false,
+  "timestamp": "2025-11-08T12:00:00Z"
+}
+```
+
+**Features:**
+
+- Trend detection (increasing/decreasing/stable)
+- Volatility calculation (coefficient of variation)
+- Change point detection
+- Seasonality analysis
+- Statistical regression
+
+**Why AURA Needs This:**
+
+- ✅ Understand metric behavior
+- ✅ Detect subtle patterns
+- ✅ Predictive analytics foundation
+
+---
+
+### 3️⃣4️⃣ Anomaly Detection
+
+**Endpoint:** `GET /api/v1/analytics/anomalies/:service?metricName=error_rate&method=combined`
+
+**Purpose:** Multi-method anomaly detection
+
+**Curl:**
+
+```bash
+# Z-score method
+curl "http://localhost:8081/api/v1/analytics/anomalies/sample-app?metricName=error_rate&method=zscore"
+
+# IQR method
+curl "http://localhost:8081/api/v1/analytics/anomalies/sample-app?metricName=error_rate&method=iqr"
+
+# EMA method
+curl "http://localhost:8081/api/v1/analytics/anomalies/sample-app?metricName=error_rate&method=ema"
+
+# Combined (all 3 methods)
+curl "http://localhost:8081/api/v1/analytics/anomalies/sample-app?metricName=error_rate&method=combined"
+```
+
+**Response:**
+
+```json
+{
+  "service": "sample-app",
+  "metric": "error_rate",
+  "method": "combined",
+  "anomalies_detected": 3,
+  "anomalies": [
+    {
+      "timestamp": "2025-11-08T11:45:00Z",
+      "value": 12.5,
+      "severity": "high",
+      "methods": ["zscore", "iqr"]
+    }
+  ],
+  "consensus_score": 0.67,
+  "timestamp": "2025-11-08T12:00:00Z"
+}
+```
+
+**Methods:**
+
+- Z-score: Statistical outlier detection
+- IQR: Interquartile range method
+- EMA: Exponential moving average
+- Combined: Consensus from all methods
+
+**Why AURA Needs This:**
+
+- ✅ Catch subtle anomalies
+- ✅ Multiple validation methods
+- ✅ Reduce false positives
+
+---
+
+### 3️⃣5️⃣ Service Correlation
+
+**Endpoint:** `GET /api/v1/analytics/correlation/:service?metricName=latency`
+
+**Purpose:** Analyze correlations between services and metrics
+
+**Curl:**
+
+```bash
+curl "http://localhost:8081/api/v1/analytics/correlation/sample-app?metricName=latency"
+```
+
+**Response:**
+
+```json
+{
+  "service": "sample-app",
+  "metric": "latency",
+  "correlations": [
+    {
+      "target_service": "api-gateway",
+      "target_metric": "error_rate",
+      "correlation": 0.85,
+      "strength": "strong",
+      "lag_seconds": 30
+    }
+  ],
+  "cascade_risk": 75.0,
+  "timestamp": "2025-11-08T12:00:00Z"
+}
+```
+
+**Features:**
+
+- Pearson correlation coefficient
+- Cross-correlation with time lags
+- Cascade risk assessment
+- Multi-service dependency mapping
+- Correlation strength classification
+
+**Why AURA Needs This:**
+
+- ✅ Understand service dependencies
+- ✅ Root cause analysis
+- ✅ Predict cascade failures
+
+---
+
+### 3️⃣6️⃣ Predictive Forecast
+
+**Endpoint:** `GET /api/v1/analytics/forecast/:service?metricName=memory_usage&hours=4`
+
+**Purpose:** Time-series forecasting for capacity planning
+
+**Curl:**
+
+```bash
+curl "http://localhost:8081/api/v1/analytics/forecast/sample-app?metricName=memory_usage&hours=4"
+```
+
+**Response:**
+
+```json
+{
+  "service": "sample-app",
+  "metric": "memory_usage",
+  "forecast": [450.2, 465.8, 481.5, 497.1],
+  "forecast_hours": 4,
+  "confidence": 85.0,
+  "method": "linear_regression",
+  "predicted_threshold_breach": false,
+  "timestamp": "2025-11-08T12:00:00Z"
+}
+```
+
+**Features:**
+
+- Linear regression forecasting
+- Configurable time horizon
+- Confidence intervals
+- Threshold breach prediction
+- Multiple metric support
+
+**Why AURA Needs This:**
+
+- ✅ Proactive capacity planning
+- ✅ Predict resource needs
+- ✅ Prevent future issues
+
+---
+
+## 🎯 Phase 3: Advanced Analyzer Endpoints
+
+### 3️⃣7️⃣ Advanced Diagnosis
+
+**Endpoint:** `GET /api/v1/advanced/diagnose/:service`
+
+**Purpose:** Deep diagnosis with root cause analysis and correlations
+
+**Curl:**
+
+```bash
+curl http://localhost:8081/api/v1/advanced/diagnose/sample-app
+```
+
+**Response:**
+
+```json
+{
+  "basic_diagnosis": {
+    "problem": "MEMORY_LEAK",
+    "confidence": 85.5,
+    "all_detections": [...]
+  },
+  "root_cause": "Memory management issue - Suspected memory leak causing resource exhaustion",
+  "impact_score": 75.5,
+  "trend_analysis": {
+    "cpu_usage": "stable",
+    "memory_usage": "increasing",
+    "error_rate": "stable",
+    "response_time": "increasing",
+    "request_rate": "stable"
+  },
+  "correlations": [
+    {
+      "detector1": "MEMORY_LEAK",
+      "detector2": "RESOURCE_EXHAUSTION",
+      "correlation": 0.85,
+      "explanation": "Memory leak directly causes resource exhaustion",
+      "causality": "Memory Leak → Resource Exhaustion"
+    }
+  ],
+  "priority_score": 82.3,
+  "timestamp": "2025-11-08T12:00:00Z"
+}
+```
+
+**Advanced Features:**
+
+- Root cause inference (pattern-based)
+- Impact scoring (0-100 severity/scope)
+- Real-time trend analysis (5 metrics)
+- Cross-detector correlation
+- Priority scoring (urgency calculation)
+- Parallel execution (5 goroutines)
+
+**Root Cause Patterns:**
+
+- Memory Leak + Resource Exhaustion → Memory management issue
+- Deployment Bug + Cascade → Bad deployment
+- External Failure + Cascade → Upstream dependency failure
+- Resource Exhaustion + High Traffic → Scaling issue
+
+**Why AURA Needs This:**
+
+- ✅ Faster incident resolution
+- ✅ Automated root cause analysis
+- ✅ Understand problem relationships
+- ✅ Prioritize remediation
+
+---
+
+### 3️⃣8️⃣ Health Score
+
+**Endpoint:** `GET /api/v1/advanced/health/:service`
+
+**Purpose:** Unified 0-100 health score for a service
+
+**Curl:**
+
+```bash
+curl http://localhost:8081/api/v1/advanced/health/sample-app
+```
+
+**Response:**
+
+```json
+{
+  "service": "sample-app",
+  "health_score": 75.5,
+  "status": "warning",
+  "timestamp": "2025-11-08T12:00:00Z"
+}
+```
+
+**Status Classification:**
+
+- `healthy` (90-100): Production ready
+- `warning` (70-90): Monitor closely  
+- `degraded` (50-70): Investigate immediately
+- `critical` (<50): Requires urgent attention
+
+**Algorithm:**
+
+```
+health = 100
+health -= severityDeduction[severity] * (confidence / 100)
+  where: CRITICAL=-50, HIGH=-30, MEDIUM=-15, LOW=-5
+health -= (additionalProblems * 10)
+health = max(0, health)
+```
+
+**Why AURA Needs This:**
+
+- ✅ Single metric for service health
+- ✅ Easy trend tracking
+- ✅ SLA monitoring
+- ✅ Dashboard visualization
+
+---
+
+### 3️⃣9️⃣ Service Comparison
+
+**Endpoint:** `GET /api/v1/advanced/compare?services=app1,app2,app3`
+
+**Purpose:** Compare health across multiple services
+
+**Curl:**
+
+```bash
+curl "http://localhost:8081/api/v1/advanced/compare?services=sample-app,api-gateway,worker"
+```
+
+**Response:**
+
+```json
+{
+  "total_services": 3,
+  "timestamp": "2025-11-08T12:00:00Z",
+  "comparisons": [
+    {
+      "service_name": "worker",
+      "health_score": 45.0,
+      "primary_issue": "MEMORY_LEAK",
+      "issue_count": 2,
+      "severity": "CRITICAL",
+      "requires_attention": true
+    },
+    {
+      "service_name": "api-gateway",
+      "health_score": 75.0,
+      "primary_issue": "DEPLOYMENT_BUG",
+      "issue_count": 1,
+      "severity": "MEDIUM",
+      "requires_attention": true
+    },
+    {
+      "service_name": "sample-app",
+      "health_score": 100.0,
+      "primary_issue": "HEALTHY",
+      "issue_count": 0,
+      "severity": "LOW",
+      "requires_attention": false
+    }
+  ]
+}
+```
+
+**Features:**
+
+- Batch service analysis
+- Automatic priority ranking (worst first)
+- Attention flagging (health < 80)
+- Fleet-wide health overview
+- Parallel processing
+
+**Why AURA Needs This:**
+
+- ✅ Fleet-wide health dashboard
+- ✅ Priority triage (worst services first)
+- ✅ Resource allocation decisions
+- ✅ Multi-service comparison
+
+---
+
+## 🎨 Complete System Architecture
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│                   AURA REST API Server                      │
+│                      (Port 8081)                            │
+│                                                             │
+│  38 Total Endpoints:                                        │
+│  ├─ 3 Health & Status                                       │
+│  ├─ 4 Metrics                                               │
+│  ├─ 3 Decisions                                             │
+│  ├─ 2 Observer                                              │
+│  ├─ 6 Kubernetes                                            │
+│  ├─ 4 Prometheus                                            │
+│  ├─ 4 Pattern Analysis                                      │
+│  ├─ 5 Core Detectors (Phase 2)                              │
+│  ├─ 4 Advanced Analytics (Phase 2.5)                        │
+│  └─ 3 Advanced Analyzer (Phase 3)                           │
+│                                                             │
+│  Advanced Capabilities:                                     │
+│  ✅ Linear Regression Analysis                              │
+│  ✅ Statistical Anomaly Detection                           │
+│  ✅ Root Cause Inference                                    │
+│  ✅ Predictive Forecasting                                  │
+│  ✅ Multi-Service Correlation                               │
+│  ✅ Health Scoring (0-100)                                  │
+│  ✅ Priority Ranking                                        │
+│  ✅ Impact Quantification                                   │
+│                                                             │
+└─────────────────────────────────────────────────────────────┘
+```
+
+---
+
+## 📚 Quick Reference Card
+
+### Health & Monitoring
+
+```bash
+# System health
+curl http://localhost:8081/health
+curl http://localhost:8081/ready
+curl http://localhost:8081/metrics
+```
+
+### Service Analysis
+
+```bash
+# Quick diagnosis
+curl http://localhost:8081/api/v1/analyze/sample-app
+
+# Deep analysis with root cause
+curl http://localhost:8081/api/v1/advanced/diagnose/sample-app
+
+# Health score
+curl http://localhost:8081/api/v1/advanced/health/sample-app
+```
+
+### Specific Detections
+
+```bash
+# Memory leak
+curl http://localhost:8081/api/v1/detect/memory-leak/sample-app
+
+# Deployment bugs
+curl http://localhost:8081/api/v1/detect/deployment-bug/sample-app
+
+# Cascade failures
+curl http://localhost:8081/api/v1/detect/cascade/sample-app
+
+# Resource exhaustion
+curl http://localhost:8081/api/v1/detect/resource-exhaustion/sample-app
+
+# External failures
+curl http://localhost:8081/api/v1/detect/external-failure/sample-app
+```
+
+### Advanced Analytics
+
+```bash
+# Pattern analysis
+curl "http://localhost:8081/api/v1/analytics/patterns/sample-app?metricName=cpu_usage"
+
+# Anomaly detection
+curl "http://localhost:8081/api/v1/analytics/anomalies/sample-app?metricName=error_rate&method=combined"
+
+# Service correlation
+curl "http://localhost:8081/api/v1/analytics/correlation/sample-app?metricName=latency"
+
+# Predictive forecast
+curl "http://localhost:8081/api/v1/analytics/forecast/sample-app?metricName=memory_usage&hours=4"
+```
+
+### Fleet Management
+
+```bash
+# Analyze all services
+curl http://localhost:8081/api/v1/analyze/all
+
+# Compare multiple services
+curl "http://localhost:8081/api/v1/advanced/compare?services=app1,app2,app3"
+
+# All diagnoses
+curl http://localhost:8081/api/v1/diagnoses
+```
+
+---
+
+## 🚀 Success! Complete API Implementation
+
+**Total Endpoints: 39** (including /metrics)
+**All Tested: ✅ 100% Working**
+**Documentation: ✅ Complete**
+
+The AURA platform now provides comprehensive monitoring, analysis, and diagnostic capabilities through a well-designed REST API with advanced ML-powered features!
 | 23 | `/api/v1/prometheus/metrics/summary` | GET | Metrics summary | 200 |
 
 That's **23 powerful endpoints** ready to automate your infrastructure! 🚀

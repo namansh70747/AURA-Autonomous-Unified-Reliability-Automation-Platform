@@ -135,6 +135,45 @@ func (c *PostgresClient) GetRecentMetrics(
 	return metrics, nil
 }
 
+// GetMetricsInRange retrieves metrics within a specific time range
+func (c *PostgresClient) GetMetricsInRange(serviceName, metricName string, startTime, endTime time.Time) ([]MetricRecord, error) {
+	ctx := context.Background()
+	query := `
+		SELECT timestamp, metric_value
+		FROM metrics
+		WHERE service_name = $1 
+		  AND metric_name = $2
+		  AND timestamp >= $3
+		  AND timestamp <= $4
+		ORDER BY timestamp ASC
+		LIMIT 10000
+	`
+
+	ctx, cancel := context.WithTimeout(ctx, 10*time.Second)
+	defer cancel()
+
+	rows, err := c.pool.Query(ctx, query, serviceName, metricName, startTime, endTime)
+	if err != nil {
+		return nil, fmt.Errorf("failed to query metrics in range: %w", err)
+	}
+	defer rows.Close()
+
+	var metrics []MetricRecord
+	for rows.Next() {
+		var m MetricRecord
+		if err := rows.Scan(&m.Timestamp, &m.Value); err != nil {
+			return nil, fmt.Errorf("failed to scan metric record: %w", err)
+		}
+		metrics = append(metrics, m)
+	}
+
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("error iterating metric records: %w", err)
+	}
+
+	return metrics, nil
+}
+
 func (c *PostgresClient) SaveDecision(ctx context.Context, decision *Decision) error {
 	query := `
 		INSERT INTO decisions (timestamp, pattern_detected, action_type, confidence, reason, parameters, executed)

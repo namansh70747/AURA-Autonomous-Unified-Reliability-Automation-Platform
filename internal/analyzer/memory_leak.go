@@ -22,17 +22,13 @@ func NewMemoryLeakDetector(db *storage.PostgresClient) *MemoryLeakDetector {
 }
 
 func (m *MemoryLeakDetector) Analyze(ctx context.Context, serviceName string) (*Detection, error) {
-	memoryMetrics, err := m.db.GetRecentMetrics(ctx, serviceName, "memory_usage", 1*time.Hour)
-	if err != nil {
-		logger.Debug("Failed to get memory metrics",
-			zap.String("service", serviceName),
-			zap.Error(err),
-		)
-		memoryMetrics, err = m.db.GetRecentMetrics(ctx, serviceName, "memory_usage_percent", 1*time.Hour)
-	}
+	logger.Info("Starting memory leak analysis",
+		zap.String("service", serviceName),
+	)
 
+	memoryMetrics, err := m.getMemoryMetrics(ctx, serviceName, 30*time.Minute)
 	if err != nil || len(memoryMetrics) < 10 {
-		logger.Debug("Insufficient memory data",
+		logger.Debug("Insufficient memory data for leak detection",
 			zap.String("service", serviceName),
 			zap.Int("data_points", len(memoryMetrics)),
 		)
@@ -43,203 +39,211 @@ func (m *MemoryLeakDetector) Analyze(ctx context.Context, serviceName string) (*
 			Confidence:  0,
 			Timestamp:   time.Now(),
 			Evidence: map[string]interface{}{
-				"reason": "insufficient data",
-				"points": len(memoryMetrics),
+				"reason":      "insufficient memory data",
+				"data_points": len(memoryMetrics),
 			},
-			Recommendation: "Waiting for more data points (need 10+)",
+			Recommendation: "Need at least 10 memory data points for analysis",
 			Severity:       "LOW",
 		}, nil
 	}
 
-	// Step 2: Calculate growth rate using linear regression
-	growthRate, r2 := m.calculateGrowthRate(memoryMetrics) //growth rate, growthRate = 30.0 (% per hour)|r2 = 0.98 (excellent fit)
+	confidence := 0.0 // Confidence = 0
+	evidence := make(map[string]interface{})
 
-	// Step 3: Check if traffic is stable
-	trafficStable := m.checkTrafficStability(ctx, serviceName) //true or false
+	slope, _, rSquared, growthRate := PerformLinearRegression(memoryMetrics)
 
-	// Step 4: Calculate confidence
-	confidence := 0.0
-
-	// Strong linear increase pattern
-	if r2 > 0.90 && growthRate > 0 {
-		confidence += 70.0
-		logger.Debug("Strong linear pattern detected",
-			zap.String("service", serviceName),
-			zap.Float64("r2", r2),
-			zap.Float64("growth_rate", growthRate),
-		)
-	} else if r2 > 0.70 && growthRate > 0 {
-		confidence += 50.0
+	if slope > 0 && rSquared > 0.7 {
+		confidence += 40.0
+		evidence["memory_growth_detected"] = true
+		evidence["growth_rate_mb_per_min"] = fmt.Sprintf("%.2f", slope*60)
+		evidence["regression_r_squared"] = fmt.Sprintf("%.3f", rSquared)
 	}
 
-	// Traffic is stable but memory growing
-	if trafficStable {
+	trafficStable, trafficGrowth := m.analyzeTrafficPattern(ctx, serviceName)
+
+	if !trafficStable && trafficGrowth > 50 {
+		confidence = math.Max(0, confidence-30.0)
+		evidence["traffic_spike"] = true
+		evidence["traffic_growth_percent"] = trafficGrowth
+	} else if trafficStable && slope > 0 {
+		confidence += 25.0
+		evidence["traffic_stable"] = true
+		evidence["memory_growth_unexplained"] = true
+	}
+
+	accelerating := m.detectAcceleration(memoryMetrics)
+	if accelerating {
 		confidence += 15.0
-		logger.Debug("Traffic stable while memory grows",
-			zap.String("service", serviceName),
-		)
+		evidence["growth_accelerating"] = true
 	}
 
-	// High growth rate
-	if growthRate > 50.0 { // Growing more than 50 MB/hour
-		confidence += 15.0
+	sustainedGrowth := m.verifySustainedGrowth(memoryMetrics)
+	if sustainedGrowth {
+		confidence += 10.0
+		evidence["sustained_growth"] = true
 	}
 
-	// Step 5: Calculate time to crash
+	volatility := CalculateVolatility(memoryMetrics)
+	if volatility < 10.0 && slope > 0 {
+		confidence += 10.0
+		evidence["low_volatility"] = true
+		evidence["volatility_percent"] = fmt.Sprintf("%.2f", volatility)
+	}
+
 	currentMemory := memoryMetrics[len(memoryMetrics)-1].MetricValue
-	maxMemory := 90.0 // 90% threshold
-	timeToExhaustion := "N/A"
+	avgMemory := CalculateAverage(memoryMetrics)
+	maxMemory := CalculateMax(memoryMetrics)
+	minMemory := CalculateMin(memoryMetrics)
+	memoryIncrease := ((currentMemory - minMemory) / minMemory) * 100
 
-	if growthRate > 0 && currentMemory < maxMemory {
-		hoursRemaining := (maxMemory - currentMemory) / growthRate
-		if hoursRemaining > 0 && hoursRemaining < 168 { // Less than 1 week
-			timeToExhaustion = fmt.Sprintf("%.1f hours", hoursRemaining)
-		}
-	}
+	evidence["current_memory_mb"] = currentMemory
+	evidence["average_memory_mb"] = avgMemory
+	evidence["max_memory_mb"] = maxMemory
+	evidence["min_memory_mb"] = minMemory
+	evidence["memory_increase_percent"] = fmt.Sprintf("%.1f", memoryIncrease)
+	evidence["growth_rate_percent"] = fmt.Sprintf("%.2f", growthRate)
+	evidence["data_points"] = len(memoryMetrics)
 
 	detected := confidence > 80.0
 	severity := m.calculateSeverity(confidence, growthRate, currentMemory)
-
-	recommendation := "No action needed"
-	if detected {
-		if currentMemory > 80.0 {
-			recommendation = "CRITICAL: Restart service immediately to prevent crash"
-		} else if currentMemory > 70.0 {
-			recommendation = "HIGH: Schedule service restart within 4 hours"
-		} else {
-			recommendation = "MEDIUM: Investigate memory leak and plan restart"
-		}
-	}
-
-	logger.Info("Memory leak analysis complete",
-		zap.String("service", serviceName),
-		zap.Bool("detected", detected),
-		zap.Float64("confidence", confidence),
-		zap.String("severity", severity),
-	)
+	recommendation := m.buildRecommendation(detected, severity, growthRate, currentMemory, trafficStable, accelerating)
 
 	return &Detection{
-		Type:        DetectionMemoryLeak,
-		ServiceName: serviceName,
-		Detected:    detected,
-		Confidence:  confidence,
-		Timestamp:   time.Now(),
-		Evidence: map[string]interface{}{
-			"growth_rate_mb_per_hour": growthRate,
-			"current_memory_percent":  currentMemory,
-			"r_squared":               r2,
-			"traffic_stable":          trafficStable,
-			"time_to_exhaustion":      timeToExhaustion,
-			"data_points":             len(memoryMetrics),
-		},
+		Type:           DetectionMemoryLeak,
+		ServiceName:    serviceName,
+		Detected:       detected,
+		Confidence:     confidence,
+		Timestamp:      time.Now(),
+		Evidence:       evidence,
 		Recommendation: recommendation,
 		Severity:       severity,
 	}, nil
 }
 
-func (m *MemoryLeakDetector) calculateGrowthRate(metrics []*storage.Metric) (growthRate float64, r2 float64) {
-	if len(metrics) < 2 {
-		return 0, 0
+func (m *MemoryLeakDetector) analyzeTrafficPattern(ctx context.Context, serviceName string) (stable bool, growthPercent float64) {
+	trafficMetrics, err := m.db.GetRecentMetrics(ctx, serviceName, "request_rate", 30*time.Minute)
+	if err != nil || len(trafficMetrics) < 5 {
+		return true, 0
 	}
 
-	n := float64(len(metrics))
+	mid := len(trafficMetrics) / 2
+	earlyAvg := CalculateAverage(trafficMetrics[:mid])
+	lateAvg := CalculateAverage(trafficMetrics[mid:])
 
-	var sumX, sumY, sumXY, sumX2, sumY2 float64
-
-	for i, metric := range metrics {
-		x := float64(i)
-		y := metric.MetricValue
-
-		sumX += x
-		sumY += y
-		sumXY += x * y
-		sumX2 += x * x
-		sumY2 += y * y
+	if earlyAvg == 0 {
+		earlyAvg = 1.0
 	}
 
-	denominator := (n*sumX2 - sumX*sumX)
-	if denominator == 0 {
-		return 0, 0
-	}
+	growthPercent = ((lateAvg - earlyAvg) / earlyAvg) * 100
+	stable = math.Abs(growthPercent) < 20.0
 
-	slope := (n*sumXY - sumX*sumY) / denominator
-
-	meanY := sumY / n
-	var ssRes, ssTot float64
-
-	for i, metric := range metrics {
-		x := float64(i)
-		y := metric.MetricValue
-		intercept := (sumY - slope*sumX) / n
-		predicted := (slope * x) + intercept
-
-		ssRes += (y - predicted) * (y - predicted)
-		ssTot += (y - meanY) * (y - meanY)
-	}
-
-	if ssTot == 0 {
-		r2 = 0
-	} else {
-		r2 = 1 - (ssRes / ssTot)
-	}
-
-	timeSpan := metrics[len(metrics)-1].Timestamp.Sub(metrics[0].Timestamp).Hours()
-	if timeSpan > 0 {
-		growthRate = slope * (60.0 / timeSpan)
-	}
-
-	return math.Abs(growthRate), math.Abs(r2)
+	return stable, growthPercent
 }
 
-func (m *MemoryLeakDetector) checkTrafficStability(ctx context.Context, serviceName string) bool {
-	metricNames := []string{"http_requests_total", "http_requests", "requests_total"}
-
-	var metrics []*storage.Metric
-	var err error
-
-	for _, name := range metricNames {
-		metrics, err = m.db.GetRecentMetrics(ctx, serviceName, name, 1*time.Hour)
-		if err == nil && len(metrics) >= 10 {
-			break
-		}
-	}
-
-	if err != nil || len(metrics) < 10 {
+func (m *MemoryLeakDetector) detectAcceleration(metrics []*storage.Metric) bool {
+	if len(metrics) < 6 {
 		return false
 	}
 
-	var sum, sumSquares float64
-	for _, metric := range metrics { //metric is each metric in metrics
-		sum += metric.MetricValue                             //sum means sum of metricvalues
-		sumSquares += metric.MetricValue * metric.MetricValue //sum of squares of metric value
+	third := len(metrics) / 3
+	seg1 := metrics[:third]
+	seg2 := metrics[third : 2*third]
+	seg3 := metrics[2*third:]
+
+	slope1, _, _, _ := PerformLinearRegression(seg1)
+	slope2, _, _, _ := PerformLinearRegression(seg2)
+	slope3, _, _, _ := PerformLinearRegression(seg3)
+
+	return slope3 > slope2 && slope2 > slope1 && slope1 > 0
+}
+
+func (m *MemoryLeakDetector) verifySustainedGrowth(metrics []*storage.Metric) bool {
+	if len(metrics) < 5 {
+		return false
 	}
 
-	n := float64(len(metrics)) //n is the length of metrics
-	mean := sum / n            //average value
-	variance := (sumSquares / n) - (mean * mean)
-	stdDev := math.Sqrt(variance)
-
-	if mean == 0 {
-		return true
+	growthCount := 0
+	for i := 2; i < len(metrics); i++ {
+		movingAvg := CalculateAverage(metrics[i-2 : i])
+		if metrics[i].MetricValue > movingAvg {
+			growthCount++
+		}
 	}
 
-	cv := stdDev / mean
+	return float64(growthCount)/float64(len(metrics)-2) > 0.7
+}
 
-	return cv < 0.3
-} //check for sudden spikes in traffic and help us to calculate correctly
+func (m *MemoryLeakDetector) getMemoryMetrics(ctx context.Context, serviceName string, duration time.Duration) ([]*storage.Metric, error) {
+	metricNames := []string{
+		"memory_usage",
+		"memory_usage_percent",
+		"memory_usage_mb",
+		"memory_working_set_bytes",
+	}
+
+	for _, name := range metricNames {
+		metrics, err := m.db.GetRecentMetrics(ctx, serviceName, name, duration)
+		if err == nil && len(metrics) > 0 {
+			return metrics, nil
+		}
+	}
+
+	return nil, fmt.Errorf("no memory metrics found")
+} //ek duration ke baad ke saare metrics mil jaenge 
+
+func (m *MemoryLeakDetector) buildRecommendation(detected bool, severity string, growthRate, currentMemory float64, trafficStable, accelerating bool) string {
+	if !detected {
+		return "No memory leak detected. Memory usage is stable."
+	}
+
+	recommendation := ""
+	switch severity {
+	case "CRITICAL":
+		recommendation = "CRITICAL MEMORY LEAK: Immediate action required. "
+	case "HIGH":
+		recommendation = "HIGH PRIORITY: Memory leak detected. "
+	default:
+		recommendation = "MEMORY LEAK WARNING: "
+	}
+
+	recommendation += fmt.Sprintf("Memory growing at %.2f%% per minute. ", growthRate)
+
+	if accelerating {
+		recommendation += "Growth is ACCELERATING - this is urgent. "
+	}
+
+	if currentMemory > 80.0 {
+		recommendation += "Current memory usage critical (>80%%). "
+	}
+
+	// Add traffic pattern context
+	if !trafficStable {
+		recommendation += "Note: Traffic is unstable, which may explain some memory variation. "
+	} else {
+		recommendation += "Memory growth is occurring despite stable traffic. "
+	}
+
+	recommendation += "Actions: 1) Enable heap profiling. 2) Check for unclosed connections/resources. 3) Review recent code changes for memory allocations. "
+
+	if severity == "CRITICAL" {
+		recommendation += "4) Consider immediate restart to prevent OOM. "
+	}
+
+	return recommendation
+}
 
 func (m *MemoryLeakDetector) calculateSeverity(confidence, growthRate, currentMemory float64) string {
 	if confidence < 80 {
 		return "LOW"
 	}
-
-	if currentMemory > 80 || growthRate > 100 {
+	if growthRate > 2.0 || currentMemory > 85.0 {
 		return "CRITICAL"
-	} else if currentMemory > 70 || growthRate > 50 {
+	}
+	if growthRate > 1.0 || currentMemory > 75.0 {
 		return "HIGH"
-	} else if currentMemory > 60 {
+	}
+	if growthRate > 0.5 || currentMemory > 65.0 {
 		return "MEDIUM"
 	}
-
 	return "LOW"
 }

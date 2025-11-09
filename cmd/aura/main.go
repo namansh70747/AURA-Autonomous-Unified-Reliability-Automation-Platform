@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"strings"
 	"syscall"
 	"time"
 
@@ -139,6 +140,18 @@ func main() {
 		v1.GET("/analyze/all", analyzeAllServicesHandler(patternAnalyzer, db))
 		v1.GET("/diagnoses/:service", getDiagnosisHistoryHandler(db))
 		v1.GET("/diagnoses", getAllDiagnosesHandler(db))
+
+		// Phase 2: Core Detection Endpoints
+		v1.GET("/detect/memory-leak/:service", detectMemoryLeakHandler(patternAnalyzer))
+		v1.GET("/detect/deployment-bug/:service", detectDeploymentBugHandler(patternAnalyzer))
+		v1.GET("/detect/cascade/:service", detectCascadeHandler(patternAnalyzer))
+		v1.GET("/detect/resource-exhaustion/:service", detectResourceExhaustionHandler(patternAnalyzer))
+		v1.GET("/detect/external-failure/:service", detectExternalFailureHandler(patternAnalyzer))
+
+		// Phase 3: Advanced Analyzer Endpoints
+		v1.GET("/advanced/diagnose/:service", analyzeServiceAdvancedHandler(patternAnalyzer))
+		v1.GET("/advanced/health/:service", getHealthScoreHandler(patternAnalyzer))
+		v1.GET("/advanced/compare", compareServicesHandler(patternAnalyzer))
 	}
 
 	srv := &http.Server{
@@ -993,6 +1006,249 @@ func getAllDiagnosesHandler(db *storage.PostgresClient) gin.HandlerFunc {
 			"total_count": totalCount,
 			"services":    allDiagnoses,
 			"timestamp":   time.Now().Format(time.RFC3339),
+		})
+	}
+}
+
+// ====================
+// Phase 2: Core Detection Handlers
+// ====================
+
+// detectMemoryLeakHandler detects memory leaks
+func detectMemoryLeakHandler(analyzer *analyzer.Analyzer) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		serviceName := c.Param("service")
+		ctx, cancel := context.WithTimeout(c.Request.Context(), 15*time.Second)
+		defer cancel()
+
+		diagnosis, err := analyzer.AnalyzeService(ctx, serviceName)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			return
+		}
+
+		// Find memory leak detection
+		for _, d := range diagnosis.AllDetections {
+			if d.Type == "MEMORY_LEAK" {
+				c.JSON(http.StatusOK, d)
+				return
+			}
+		}
+
+		c.JSON(http.StatusOK, gin.H{
+			"type":       "memory_leak",
+			"service":    serviceName,
+			"detected":   false,
+			"confidence": 0,
+			"message":    "No memory leak detected",
+		})
+	}
+}
+
+// detectDeploymentBugHandler detects deployment bugs
+func detectDeploymentBugHandler(analyzer *analyzer.Analyzer) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		serviceName := c.Param("service")
+		ctx, cancel := context.WithTimeout(c.Request.Context(), 15*time.Second)
+		defer cancel()
+
+		diagnosis, err := analyzer.AnalyzeService(ctx, serviceName)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			return
+		}
+
+		for _, d := range diagnosis.AllDetections {
+			if d.Type == "DEPLOYMENT_BUG" {
+				c.JSON(http.StatusOK, d)
+				return
+			}
+		}
+
+		c.JSON(http.StatusOK, gin.H{
+			"type":       "deployment_bug",
+			"service":    serviceName,
+			"detected":   false,
+			"confidence": 0,
+			"message":    "No deployment bug detected",
+		})
+	}
+}
+
+// detectCascadeHandler detects cascade failures
+func detectCascadeHandler(analyzer *analyzer.Analyzer) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		serviceName := c.Param("service")
+		ctx, cancel := context.WithTimeout(c.Request.Context(), 15*time.Second)
+		defer cancel()
+
+		diagnosis, err := analyzer.AnalyzeService(ctx, serviceName)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			return
+		}
+
+		for _, d := range diagnosis.AllDetections {
+			if d.Type == "CASCADING_FAILURE" {
+				c.JSON(http.StatusOK, d)
+				return
+			}
+		}
+
+		c.JSON(http.StatusOK, gin.H{
+			"type":       "cascade_failure",
+			"service":    serviceName,
+			"detected":   false,
+			"confidence": 0,
+			"message":    "No cascade failure detected",
+		})
+	}
+}
+
+// detectResourceExhaustionHandler detects resource exhaustion
+func detectResourceExhaustionHandler(analyzer *analyzer.Analyzer) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		serviceName := c.Param("service")
+		ctx, cancel := context.WithTimeout(c.Request.Context(), 15*time.Second)
+		defer cancel()
+
+		diagnosis, err := analyzer.AnalyzeService(ctx, serviceName)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			return
+		}
+
+		for _, d := range diagnosis.AllDetections {
+			if d.Type == "RESOURCE_EXHAUSTION" {
+				c.JSON(http.StatusOK, d)
+				return
+			}
+		}
+
+		c.JSON(http.StatusOK, gin.H{
+			"type":       "resource_exhaustion",
+			"service":    serviceName,
+			"detected":   false,
+			"confidence": 0,
+			"message":    "No resource exhaustion detected",
+		})
+	}
+}
+
+// detectExternalFailureHandler detects external failures
+func detectExternalFailureHandler(analyzer *analyzer.Analyzer) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		serviceName := c.Param("service")
+		ctx, cancel := context.WithTimeout(c.Request.Context(), 15*time.Second)
+		defer cancel()
+
+		diagnosis, err := analyzer.AnalyzeService(ctx, serviceName)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			return
+		}
+
+		for _, d := range diagnosis.AllDetections {
+			if d.Type == "EXTERNAL_FAILURE" {
+				c.JSON(http.StatusOK, d)
+				return
+			}
+		}
+
+		c.JSON(http.StatusOK, gin.H{
+			"type":       "external_failure",
+			"service":    serviceName,
+			"detected":   false,
+			"confidence": 0,
+			"message":    "No external failure detected",
+		})
+	}
+}
+
+// ==================== ADVANCED ANALYZER ENDPOINTS ====================
+
+func analyzeServiceAdvancedHandler(analyzer *analyzer.Analyzer) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		serviceName := c.Param("service")
+
+		ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
+		defer cancel()
+
+		advancedDiag, err := analyzer.AnalyzeServiceAdvanced(ctx, serviceName)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			return
+		}
+
+		c.JSON(http.StatusOK, advancedDiag)
+	}
+}
+
+func getHealthScoreHandler(analyzer *analyzer.Analyzer) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		serviceName := c.Param("service")
+
+		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+		defer cancel()
+
+		healthScore, err := analyzer.GetHealthScore(ctx, serviceName)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			return
+		}
+
+		status := "healthy"
+		if healthScore < 50 {
+			status = "critical"
+		} else if healthScore < 70 {
+			status = "degraded"
+		} else if healthScore < 90 {
+			status = "warning"
+		}
+
+		c.JSON(http.StatusOK, gin.H{
+			"service":      serviceName,
+			"health_score": healthScore,
+			"status":       status,
+			"timestamp":    time.Now().Format(time.RFC3339),
+		})
+	}
+}
+
+func compareServicesHandler(analyzer *analyzer.Analyzer) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		servicesParam := c.Query("services")
+		if servicesParam == "" {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "services parameter required (comma-separated list)"})
+			return
+		}
+
+		services := []string{}
+		for _, s := range strings.Split(servicesParam, ",") {
+			trimmed := strings.TrimSpace(s)
+			if trimmed != "" {
+				services = append(services, trimmed)
+			}
+		}
+
+		if len(services) == 0 {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "no valid services provided"})
+			return
+		}
+
+		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+		defer cancel()
+
+		comparisons, err := analyzer.CompareServices(ctx, services)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			return
+		}
+
+		c.JSON(http.StatusOK, gin.H{
+			"total_services": len(comparisons),
+			"timestamp":      time.Now().Format(time.RFC3339),
+			"comparisons":    comparisons,
 		})
 	}
 }
