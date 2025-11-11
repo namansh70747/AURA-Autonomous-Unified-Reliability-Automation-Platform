@@ -96,7 +96,7 @@ func (c *PostgresClient) GetRecentMetrics(
 		WHERE service_name = $1
 		  AND metric_name = $2
 		  AND timestamp > $3 
-		ORDER BY timestamp DESC
+		ORDER BY timestamp ASC
 		LIMIT 1000
 	`
 	// what is this timestamp for ? answer is that it is used to get the recent metrics in a duration

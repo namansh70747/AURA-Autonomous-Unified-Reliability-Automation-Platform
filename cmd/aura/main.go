@@ -6,7 +6,6 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
-	"strings"
 	"syscall"
 	"time"
 
@@ -68,9 +67,9 @@ func main() {
 		logger.Fatal("Metrics observer init failed", zap.Error(err))
 	}
 
-	// Initialize Pattern Analyzer (Phase 2)
-	patternAnalyzer := analyzer.NewAnalyzer(db)
-	logger.Info("Pattern analyzer initialized successfully")
+	// Initialize AI-Level Ultimate Analyzer
+	ultimateAnalyzer := analyzer.NewUltimateAnalyzer(db)
+	logger.Info("🤖 AI-Level Ultimate Analyzer initialized successfully")
 
 	observerCtx, observerCancel := context.WithCancel(context.Background())
 	defer observerCancel()
@@ -135,23 +134,22 @@ func main() {
 		v1.GET("/prometheus/query", prometheusQueryHandler(metricsObserver))
 		v1.GET("/prometheus/metrics/summary", prometheusMetricsSummaryHandler(db))
 
-		// Phase 2: Pattern Analysis Endpoints
-		v1.GET("/analyze/:service", analyzeServiceHandler(patternAnalyzer))
-		v1.GET("/analyze/all", analyzeAllServicesHandler(patternAnalyzer, db))
-		v1.GET("/diagnoses/:service", getDiagnosisHistoryHandler(db))
-		v1.GET("/diagnoses", getAllDiagnosesHandler(db))
+		// 🤖 AI-Level Ultimate Analyzer Endpoints (The ONLY analyzer - production ready!)
+		ai := v1.Group("/ai")
+		{
+			// Ultimate diagnosis - comprehensive AI analysis
+			ai.GET("/diagnose/:service", aiDiagnoseServiceHandler(ultimateAnalyzer))
 
-		// Phase 2: Core Detection Endpoints
-		v1.GET("/detect/memory-leak/:service", detectMemoryLeakHandler(patternAnalyzer))
-		v1.GET("/detect/deployment-bug/:service", detectDeploymentBugHandler(patternAnalyzer))
-		v1.GET("/detect/cascade/:service", detectCascadeHandler(patternAnalyzer))
-		v1.GET("/detect/resource-exhaustion/:service", detectResourceExhaustionHandler(patternAnalyzer))
-		v1.GET("/detect/external-failure/:service", detectExternalFailureHandler(patternAnalyzer))
+			// Feature extraction - see all 60+ features
+			ai.GET("/features/:service", aiGetFeaturesHandler(ultimateAnalyzer))
 
-		// Phase 3: Advanced Analyzer Endpoints
-		v1.GET("/advanced/diagnose/:service", analyzeServiceAdvancedHandler(patternAnalyzer))
-		v1.GET("/advanced/health/:service", getHealthScoreHandler(patternAnalyzer))
-		v1.GET("/advanced/compare", compareServicesHandler(patternAnalyzer))
+			// Individual enhanced detectors
+			ai.GET("/detect/memory-leak/:service", aiDetectMemoryLeakHandler(ultimateAnalyzer))
+			ai.GET("/detect/resource-exhaustion/:service", aiDetectResourceExhaustionHandler(ultimateAnalyzer))
+			ai.GET("/detect/deployment-bug/:service", aiDetectDeploymentBugHandler(ultimateAnalyzer))
+			ai.GET("/detect/external-failure/:service", aiDetectExternalFailureHandler(ultimateAnalyzer))
+			ai.GET("/detect/cascade/:service", aiDetectCascadeHandler(ultimateAnalyzer))
+		}
 	}
 
 	srv := &http.Server{
@@ -844,411 +842,247 @@ func prometheusMetricsSummaryHandler(db *storage.PostgresClient) gin.HandlerFunc
 	}
 }
 
-// analyzeServiceHandler triggers analysis for a specific service
-func analyzeServiceHandler(analyzer *analyzer.Analyzer) gin.HandlerFunc {
+// ==================== AI-LEVEL ANALYZER HANDLERS ====================
+// The ONLY analyzer - All endpoints use the AI-Level Ultimate Analyzer
+
+func aiDiagnoseServiceHandler(ua *analyzer.UltimateAnalyzer) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		serviceName := c.Param("service")
+
+		ctx, cancel := context.WithTimeout(c.Request.Context(), 30*time.Second)
+		defer cancel()
+
+		logger.Info("🤖 AI diagnosis requested",
+			zap.String("service", serviceName),
+			zap.String("client_ip", c.ClientIP()),
+		)
+
+		diagnosis, err := ua.DiagnoseService(ctx, serviceName)
+		if err != nil {
+			logger.Error("AI diagnosis failed", zap.Error(err))
+			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			return
+		}
+
+		c.JSON(http.StatusOK, gin.H{
+			"service":              diagnosis.ServiceName,
+			"timestamp":            diagnosis.Timestamp.Format(time.RFC3339),
+			"analysis_duration_ms": diagnosis.AnalysisDuration.Milliseconds(),
+
+			"primary_detection": gin.H{
+				"problem":        diagnosis.PrimaryDetection.Type,
+				"detected":       diagnosis.PrimaryDetection.Detected,
+				"confidence":     fmt.Sprintf("%.2f%%", diagnosis.PrimaryDetection.Confidence),
+				"severity":       diagnosis.PrimaryDetection.Severity,
+				"evidence":       diagnosis.PrimaryDetection.Evidence,
+				"recommendation": diagnosis.PrimaryDetection.Recommendation,
+			},
+
+			"health_metrics": gin.H{
+				"health_score":         fmt.Sprintf("%.2f/100", diagnosis.HealthScore),
+				"stability_index":      fmt.Sprintf("%.2f/10", diagnosis.StabilityIndex),
+				"predictability_score": fmt.Sprintf("%.2f/100", diagnosis.PredictabilityScore),
+				"system_stress":        fmt.Sprintf("%.2f/100", diagnosis.SystemStress),
+			},
+
+			"assessment": gin.H{
+				"risk_level":          diagnosis.RiskLevel,
+				"action_required":     diagnosis.ActionRequired,
+				"predictive_insights": diagnosis.PredictiveInsights,
+			},
+
+			// Enhanced actuator-ready outputs
+			"root_cause": diagnosis.RootCause,
+
+			"actuator_actions": diagnosis.ActuatorActions,
+
+			"impact_assessment": diagnosis.ImpactAssessment,
+
+			"recommendation": diagnosis.Recommendation,
+			"prediction_id":  diagnosis.PredictionID,
+
+			"all_detections": formatDetections(diagnosis.AllDetections),
+
+			// 🌟 NEW: Comprehensive Enhanced Diagnostics
+			"enhanced_data": diagnosis.EnhancedData,
+		})
+	}
+}
+
+func aiGetFeaturesHandler(ua *analyzer.UltimateAnalyzer) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		serviceName := c.Param("service")
 
 		ctx, cancel := context.WithTimeout(c.Request.Context(), 15*time.Second)
 		defer cancel()
 
-		logger.Info("Analyzing service via API",
-			zap.String("service", serviceName),
-			zap.String("client_ip", c.ClientIP()),
-		)
-
-		diagnosis, err := analyzer.AnalyzeService(ctx, serviceName)
+		features, err := ua.FeatureExtractor().ExtractFeatures(ctx, serviceName, 30*time.Minute)
 		if err != nil {
-			logger.Error("Analysis failed",
-				zap.String("service", serviceName),
-				zap.Error(err),
-			)
-			c.JSON(http.StatusInternalServerError, gin.H{
-				"error": fmt.Sprintf("Analysis failed: %v", err),
-			})
-			return
-		}
-
-		c.JSON(http.StatusOK, gin.H{
-			"service":     serviceName,
-			"diagnosis":   diagnosis,
-			"analyzed_at": time.Now().Format(time.RFC3339),
-		})
-	}
-}
-
-// analyzeAllServicesHandler analyzes all known services
-func analyzeAllServicesHandler(analyzer *analyzer.Analyzer, db *storage.PostgresClient) gin.HandlerFunc {
-	return func(c *gin.Context) {
-		ctx, cancel := context.WithTimeout(c.Request.Context(), 30*time.Second)
-		defer cancel()
-
-		logger.Info("Analyzing all services via API",
-			zap.String("client_ip", c.ClientIP()),
-		)
-
-		// Get list of services from database
-		services, err := db.GetAllServices(ctx)
-		if err != nil {
-			logger.Error("Failed to get services list", zap.Error(err))
-			c.JSON(http.StatusInternalServerError, gin.H{
-				"error": "Failed to get services list",
-			})
-			return
-		}
-
-		if len(services) == 0 {
-			logger.Warn("No services found in database")
-			c.JSON(http.StatusOK, gin.H{
-				"total_services": 0,
-				"services":       []string{},
-				"diagnoses":      map[string]interface{}{},
-				"message":        "No services found. Ensure metrics are being collected.",
-			})
-			return
-		}
-
-		// Analyze all services
-		results, err := analyzer.AnalyzeAllServices(ctx, services)
-		if err != nil {
-			logger.Error("Bulk analysis failed", zap.Error(err))
-			c.JSON(http.StatusInternalServerError, gin.H{
-				"error": "Analysis failed",
-			})
-			return
-		}
-
-		logger.Info("Bulk analysis complete",
-			zap.Int("services_analyzed", len(results)),
-		)
-
-		c.JSON(http.StatusOK, gin.H{
-			"total_services": len(services),
-			"services":       services,
-			"diagnoses":      results,
-			"analyzed_at":    time.Now().Format(time.RFC3339),
-		})
-	}
-}
-
-// getDiagnosisHistoryHandler retrieves diagnosis history for a specific service
-func getDiagnosisHistoryHandler(db *storage.PostgresClient) gin.HandlerFunc {
-	return func(c *gin.Context) {
-		serviceName := c.Param("service")
-		limit := 10
-
-		if val, ok := c.GetQuery("limit"); ok {
-			if l, parseErr := fmt.Sscanf(val, "%d", &limit); parseErr == nil && l == 1 {
-				// limit parsed successfully
-			}
-		}
-
-		ctx, cancel := context.WithTimeout(c.Request.Context(), 5*time.Second)
-		defer cancel()
-
-		diagnoses, err := db.GetRecentDiagnosis(ctx, serviceName, limit)
-		if err != nil {
-			logger.Error("Failed to fetch diagnoses",
-				zap.String("service", serviceName),
-				zap.Error(err),
-			)
-			c.JSON(http.StatusInternalServerError, gin.H{
-				"error": "failed to fetch diagnoses",
-			})
+			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 			return
 		}
 
 		c.JSON(http.StatusOK, gin.H{
 			"service":   serviceName,
-			"count":     len(diagnoses),
-			"diagnoses": diagnoses,
-			"timestamp": time.Now().Format(time.RFC3339),
+			"timestamp": features.Timestamp.Format(time.RFC3339),
+
+			"time_domain_features": gin.H{
+				"cpu": gin.H{
+					"mean":            fmt.Sprintf("%.2f%%", features.CPUMean),
+					"std_dev":         fmt.Sprintf("%.2f", features.CPUStdDev),
+					"trend":           fmt.Sprintf("%.4f%%/min", features.CPUTrend),
+					"volatility":      fmt.Sprintf("%.3f", features.CPUVolatility),
+					"autocorrelation": fmt.Sprintf("%.3f", features.CPUAutocorrelation),
+					"anomaly_score":   fmt.Sprintf("%.2f/100", features.CPUAnomalyScore),
+				},
+				"memory": gin.H{
+					"mean":            fmt.Sprintf("%.2f%%", features.MemoryMean),
+					"std_dev":         fmt.Sprintf("%.2f", features.MemoryStdDev),
+					"trend":           fmt.Sprintf("%.4f%%/min", features.MemoryTrend),
+					"volatility":      fmt.Sprintf("%.3f", features.MemoryVolatility),
+					"autocorrelation": fmt.Sprintf("%.3f", features.MemoryAutocorrelation),
+					"anomaly_score":   fmt.Sprintf("%.2f/100", features.MemoryAnomalyScore),
+				},
+				"errors": gin.H{
+					"mean":          fmt.Sprintf("%.2f%%", features.ErrorRateMean),
+					"max":           fmt.Sprintf("%.2f%%", features.ErrorRateMax),
+					"trend":         fmt.Sprintf("%.4f%%/min", features.ErrorRateTrend),
+					"spikiness":     fmt.Sprintf("%.2f", features.ErrorRateSpikiness),
+					"anomaly_score": fmt.Sprintf("%.2f/100", features.ErrorAnomalyScore),
+				},
+				"latency": gin.H{
+					"mean":          fmt.Sprintf("%.2fms", features.LatencyMean),
+					"p95":           fmt.Sprintf("%.2fms", features.LatencyP95),
+					"p99":           fmt.Sprintf("%.2fms", features.LatencyP99),
+					"std_dev":       fmt.Sprintf("%.2fms", features.LatencyStdDev),
+					"anomaly_score": fmt.Sprintf("%.2f/100", features.LatencyAnomalyScore),
+				},
+			},
+
+			"cross_metric_correlations": gin.H{
+				"cpu_memory":    fmt.Sprintf("%.3f", features.CPUMemoryCorr),
+				"cpu_error":     fmt.Sprintf("%.3f", features.CPUErrorCorr),
+				"memory_error":  fmt.Sprintf("%.3f", features.MemoryErrorCorr),
+				"latency_error": fmt.Sprintf("%.3f", features.LatencyErrorCorr),
+			},
+
+			"pattern_detection": gin.H{
+				"periodic_pattern": features.HasPeriodicPattern,
+				"period_length":    features.PeriodLength.String(),
+				"trend":            features.HasTrend,
+				"trend_direction":  features.TrendDirection,
+			},
+
+			"composite_scores": gin.H{
+				"system_stress":        fmt.Sprintf("%.2f/100", features.SystemStress),
+				"health_score":         fmt.Sprintf("%.2f/100", features.HealthScore),
+				"stability_index":      fmt.Sprintf("%.2f/10", features.StabilityIndex),
+				"predictability_score": fmt.Sprintf("%.2f/100", features.PredictabilityScore),
+			},
 		})
 	}
 }
 
-// getAllDiagnosesHandler retrieves all recent diagnoses across all services
-func getAllDiagnosesHandler(db *storage.PostgresClient) gin.HandlerFunc {
-	return func(c *gin.Context) {
-		limit := 50
-		if val, ok := c.GetQuery("limit"); ok {
-			if l, parseErr := fmt.Sscanf(val, "%d", &limit); parseErr == nil && l == 1 {
-				// limit parsed successfully
-			}
-		}
-
-		ctx, cancel := context.WithTimeout(c.Request.Context(), 5*time.Second)
-		defer cancel()
-
-		// Get all diagnoses from database - need to implement this
-		// For now, get recent diagnoses for known services
-		services, err := db.GetAllServices(ctx)
-		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{
-				"error": "failed to fetch services",
-			})
-			return
-		}
-
-		allDiagnoses := make(map[string][]*storage.DiagnosisRecord)
-		totalCount := 0
-
-		for _, service := range services {
-			diagnoses, err := db.GetRecentDiagnosis(ctx, service, limit/len(services))
-			if err != nil {
-				continue
-			}
-			allDiagnoses[service] = diagnoses
-			totalCount += len(diagnoses)
-		}
-
-		c.JSON(http.StatusOK, gin.H{
-			"total_count": totalCount,
-			"services":    allDiagnoses,
-			"timestamp":   time.Now().Format(time.RFC3339),
-		})
-	}
-}
-
-// ====================
-// Phase 2: Core Detection Handlers
-// ====================
-
-// detectMemoryLeakHandler detects memory leaks
-func detectMemoryLeakHandler(analyzer *analyzer.Analyzer) gin.HandlerFunc {
-	return func(c *gin.Context) {
-		serviceName := c.Param("service")
-		ctx, cancel := context.WithTimeout(c.Request.Context(), 15*time.Second)
-		defer cancel()
-
-		diagnosis, err := analyzer.AnalyzeService(ctx, serviceName)
-		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
-			return
-		}
-
-		// Find memory leak detection
-		for _, d := range diagnosis.AllDetections {
-			if d.Type == "MEMORY_LEAK" {
-				c.JSON(http.StatusOK, d)
-				return
-			}
-		}
-
-		c.JSON(http.StatusOK, gin.H{
-			"type":       "memory_leak",
-			"service":    serviceName,
-			"detected":   false,
-			"confidence": 0,
-			"message":    "No memory leak detected",
-		})
-	}
-}
-
-// detectDeploymentBugHandler detects deployment bugs
-func detectDeploymentBugHandler(analyzer *analyzer.Analyzer) gin.HandlerFunc {
+func aiDetectMemoryLeakHandler(ua *analyzer.UltimateAnalyzer) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		serviceName := c.Param("service")
-		ctx, cancel := context.WithTimeout(c.Request.Context(), 15*time.Second)
+		ctx, cancel := context.WithTimeout(c.Request.Context(), 10*time.Second)
 		defer cancel()
 
-		diagnosis, err := analyzer.AnalyzeService(ctx, serviceName)
+		detection, err := ua.EnhancedDetector().DetectMemoryLeakEnhanced(ctx, serviceName)
 		if err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 			return
 		}
 
-		for _, d := range diagnosis.AllDetections {
-			if d.Type == "DEPLOYMENT_BUG" {
-				c.JSON(http.StatusOK, d)
-				return
-			}
-		}
-
-		c.JSON(http.StatusOK, gin.H{
-			"type":       "deployment_bug",
-			"service":    serviceName,
-			"detected":   false,
-			"confidence": 0,
-			"message":    "No deployment bug detected",
-		})
+		c.JSON(http.StatusOK, formatDetection(detection))
 	}
 }
 
-// detectCascadeHandler detects cascade failures
-func detectCascadeHandler(analyzer *analyzer.Analyzer) gin.HandlerFunc {
+func aiDetectResourceExhaustionHandler(ua *analyzer.UltimateAnalyzer) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		serviceName := c.Param("service")
-		ctx, cancel := context.WithTimeout(c.Request.Context(), 15*time.Second)
+		ctx, cancel := context.WithTimeout(c.Request.Context(), 10*time.Second)
 		defer cancel()
 
-		diagnosis, err := analyzer.AnalyzeService(ctx, serviceName)
+		detection, err := ua.EnhancedDetector().DetectResourceExhaustionEnhanced(ctx, serviceName)
 		if err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 			return
 		}
 
-		for _, d := range diagnosis.AllDetections {
-			if d.Type == "CASCADING_FAILURE" {
-				c.JSON(http.StatusOK, d)
-				return
-			}
-		}
-
-		c.JSON(http.StatusOK, gin.H{
-			"type":       "cascade_failure",
-			"service":    serviceName,
-			"detected":   false,
-			"confidence": 0,
-			"message":    "No cascade failure detected",
-		})
+		c.JSON(http.StatusOK, formatDetection(detection))
 	}
 }
 
-// detectResourceExhaustionHandler detects resource exhaustion
-func detectResourceExhaustionHandler(analyzer *analyzer.Analyzer) gin.HandlerFunc {
+func aiDetectDeploymentBugHandler(ua *analyzer.UltimateAnalyzer) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		serviceName := c.Param("service")
-		ctx, cancel := context.WithTimeout(c.Request.Context(), 15*time.Second)
+		ctx, cancel := context.WithTimeout(c.Request.Context(), 10*time.Second)
 		defer cancel()
 
-		diagnosis, err := analyzer.AnalyzeService(ctx, serviceName)
+		detection, err := ua.EnhancedDetector().DetectDeploymentBugEnhanced(ctx, serviceName)
 		if err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 			return
 		}
 
-		for _, d := range diagnosis.AllDetections {
-			if d.Type == "RESOURCE_EXHAUSTION" {
-				c.JSON(http.StatusOK, d)
-				return
-			}
-		}
-
-		c.JSON(http.StatusOK, gin.H{
-			"type":       "resource_exhaustion",
-			"service":    serviceName,
-			"detected":   false,
-			"confidence": 0,
-			"message":    "No resource exhaustion detected",
-		})
+		c.JSON(http.StatusOK, formatDetection(detection))
 	}
 }
 
-// detectExternalFailureHandler detects external failures
-func detectExternalFailureHandler(analyzer *analyzer.Analyzer) gin.HandlerFunc {
+func aiDetectExternalFailureHandler(ua *analyzer.UltimateAnalyzer) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		serviceName := c.Param("service")
-		ctx, cancel := context.WithTimeout(c.Request.Context(), 15*time.Second)
+		ctx, cancel := context.WithTimeout(c.Request.Context(), 10*time.Second)
 		defer cancel()
 
-		diagnosis, err := analyzer.AnalyzeService(ctx, serviceName)
+		detection, err := ua.EnhancedDetector().DetectExternalFailureEnhanced(ctx, serviceName)
 		if err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 			return
 		}
 
-		for _, d := range diagnosis.AllDetections {
-			if d.Type == "EXTERNAL_FAILURE" {
-				c.JSON(http.StatusOK, d)
-				return
-			}
-		}
-
-		c.JSON(http.StatusOK, gin.H{
-			"type":       "external_failure",
-			"service":    serviceName,
-			"detected":   false,
-			"confidence": 0,
-			"message":    "No external failure detected",
-		})
+		c.JSON(http.StatusOK, formatDetection(detection))
 	}
 }
 
-// ==================== ADVANCED ANALYZER ENDPOINTS ====================
-
-func analyzeServiceAdvancedHandler(analyzer *analyzer.Analyzer) gin.HandlerFunc {
+func aiDetectCascadeHandler(ua *analyzer.UltimateAnalyzer) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		serviceName := c.Param("service")
-
-		ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
+		ctx, cancel := context.WithTimeout(c.Request.Context(), 10*time.Second)
 		defer cancel()
 
-		advancedDiag, err := analyzer.AnalyzeServiceAdvanced(ctx, serviceName)
+		detection, err := ua.EnhancedDetector().DetectCascadeFailureEnhanced(ctx, serviceName)
 		if err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 			return
 		}
 
-		c.JSON(http.StatusOK, advancedDiag)
+		c.JSON(http.StatusOK, formatDetection(detection))
 	}
 }
 
-func getHealthScoreHandler(analyzer *analyzer.Analyzer) gin.HandlerFunc {
-	return func(c *gin.Context) {
-		serviceName := c.Param("service")
-
-		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-		defer cancel()
-
-		healthScore, err := analyzer.GetHealthScore(ctx, serviceName)
-		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
-			return
-		}
-
-		status := "healthy"
-		if healthScore < 50 {
-			status = "critical"
-		} else if healthScore < 70 {
-			status = "degraded"
-		} else if healthScore < 90 {
-			status = "warning"
-		}
-
-		c.JSON(http.StatusOK, gin.H{
-			"service":      serviceName,
-			"health_score": healthScore,
-			"status":       status,
-			"timestamp":    time.Now().Format(time.RFC3339),
-		})
+// Helper functions for AI endpoints
+func formatDetection(d *analyzer.Detection) gin.H {
+	return gin.H{
+		"type":           d.Type,
+		"service_name":   d.ServiceName,
+		"detected":       d.Detected,
+		"confidence":     fmt.Sprintf("%.2f%%", d.Confidence),
+		"severity":       d.Severity,
+		"evidence":       d.Evidence,
+		"recommendation": d.Recommendation,
+		"timestamp":      d.Timestamp.Format(time.RFC3339),
 	}
 }
 
-func compareServicesHandler(analyzer *analyzer.Analyzer) gin.HandlerFunc {
-	return func(c *gin.Context) {
-		servicesParam := c.Query("services")
-		if servicesParam == "" {
-			c.JSON(http.StatusBadRequest, gin.H{"error": "services parameter required (comma-separated list)"})
-			return
+func formatDetections(detections []*analyzer.Detection) []gin.H {
+	result := make([]gin.H, 0, len(detections))
+	for _, d := range detections {
+		if d != nil {
+			result = append(result, formatDetection(d))
 		}
-
-		services := []string{}
-		for _, s := range strings.Split(servicesParam, ",") {
-			trimmed := strings.TrimSpace(s)
-			if trimmed != "" {
-				services = append(services, trimmed)
-			}
-		}
-
-		if len(services) == 0 {
-			c.JSON(http.StatusBadRequest, gin.H{"error": "no valid services provided"})
-			return
-		}
-
-		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
-		defer cancel()
-
-		comparisons, err := analyzer.CompareServices(ctx, services)
-		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
-			return
-		}
-
-		c.JSON(http.StatusOK, gin.H{
-			"total_services": len(comparisons),
-			"timestamp":      time.Now().Format(time.RFC3339),
-			"comparisons":    comparisons,
-		})
 	}
+	return result
 }

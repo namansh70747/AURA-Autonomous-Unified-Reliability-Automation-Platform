@@ -57,19 +57,19 @@ func PerformLinearRegression(metrics []*storage.Metric) (slope, intercept, rSqua
 		growthRatePercent = (slope / meanY) * 100
 	}
 
-	return slope, intercept, rSquared, growthRatePercent 
+	return slope, intercept, rSquared, growthRatePercent
 	// how fast memory is increasing / decreasing
 	// starting point (not very used here, but needed to complete linear regression formula)
 	// how straight / how consistent the line is (0 to 1)
 	// how fast it is growing in percentage
 	/*
-	| r² value | meaning in simple english                                       |
-	| -------- | --------------------------------------------------------------- |
-	| 1.0      | perfectly consistent trend. Every point is exactly on the line. |
-	| 0.9      | very consistent. Almost a clean line.                           |
-	| 0.7      | medium ok. Some noise.                                          |
-	| 0.3      | very noisy. Points scattered.                                   |
-	| 0.0      | no trend. pure random.                                          |
+		| r² value | meaning in simple english                                       |
+		| -------- | --------------------------------------------------------------- |
+		| 1.0      | perfectly consistent trend. Every point is exactly on the line. |
+		| 0.9      | very consistent. Almost a clean line.                           |
+		| 0.7      | medium ok. Some noise.                                          |
+		| 0.3      | very noisy. Points scattered.                                   |
+		| 0.0      | no trend. pure random.                                          |
 	*/
 }
 
@@ -325,4 +325,16 @@ func CalculatePercentile(values []float64, percentile float64) float64 {
 
 	weight := index - float64(lower)
 	return sorted[lower]*(1-weight) + sorted[upper]*weight
+}
+
+// CalculateMean calculates the arithmetic mean of float64 values
+func CalculateMean(values []float64) float64 {
+	if len(values) == 0 {
+		return 0
+	}
+	sum := 0.0
+	for _, v := range values {
+		sum += v
+	}
+	return sum / float64(len(values))
 }
